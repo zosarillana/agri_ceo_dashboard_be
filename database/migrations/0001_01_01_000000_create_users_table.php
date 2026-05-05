@@ -17,6 +17,21 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+
+            // Add role and department
+            $table->enum('role', ['superadmin', 'admin', 'user'])->default('user');
+            $table->enum('department', [
+                'production',
+                'procurement',
+                'sales',
+                'accounts',
+                'trading',
+                'quality_control',
+                'workforce',
+                'maintenance',
+                'energy',
+            ])->nullable();
+
             $table->rememberToken();
             $table->timestamps();
         });
