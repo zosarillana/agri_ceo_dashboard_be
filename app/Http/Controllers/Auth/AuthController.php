@@ -28,11 +28,11 @@ class AuthController extends Controller
             'department' => $request->department,
         ]);
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        // 🔥 LOG THE USER IN (SESSION)
+        Auth::login($user);
 
         return response()->json([
             'user' => $user,
-            'token' => $token,
         ]);
     }
 
@@ -50,13 +50,12 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $user = Auth::user();
-
-        $token = $user->createToken('api-token')->plainTextToken;
+        // 🔥 IMPORTANT
+        $request->session()->regenerate();
 
         return response()->json([
-            'user' => $user,
-            'token' => $token,
+            'message' => 'Logged in successfully',
+            'user' => Auth::user(),
         ]);
     }
 
@@ -69,7 +68,10 @@ class AuthController extends Controller
     // LOGOUT
     public function logout(Request $request)
     {
-        $request->user()->tokens()->delete();
+        Auth::logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json([
             'message' => 'Logged out successfully'
