@@ -26,7 +26,7 @@ return [
     // ))),
     'stateful' => explode(',', env(
         'SANCTUM_STATEFUL_DOMAINS',           // just the key name
-        'localhost:5173,localhost:8000'        // fallback default
+        '192.168.30.3:8080'        // fallback default
     )),
 
     /*
