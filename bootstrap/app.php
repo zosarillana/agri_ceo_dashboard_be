@@ -15,9 +15,6 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // CORS must run globally BEFORE everything else
-        $middleware->prepend(HandleCors::class);
-
         $middleware->api(prepend: [
             EnsureFrontendRequestsAreStateful::class,
         ]);
