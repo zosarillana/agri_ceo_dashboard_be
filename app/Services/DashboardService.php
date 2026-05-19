@@ -3,28 +3,19 @@
 namespace App\Services;
 
 use App\Models\ProductionEntry;
+use App\Services\MaintenanceLogService;
 use Carbon\Carbon;
 
 class DashboardService
 {
-    // public function getProductionStats(): array
-    // {
-    //     $today = now()->toDateString();
+    public function getDashboardStats(?string $date = null): array
+    {
+        return [
+            'production' => $this->getProductionStats($date),
+            'maintenance' => $this->getMaintenanceStats(),
+        ];
+    }
 
-    //     $todayProductionTotal = ProductionEntry::whereDate('production_date', $today)
-    //         ->sum('actual_output');
-
-    //     return [
-    //         // REAL KPI (what you actually want)
-    //         'today_production_output' => (float) $todayProductionTotal,
-
-    //         // optional extra metrics (keep or remove later)
-    //         'total_production_entries' => ProductionEntry::count(),
-    //         'this_month_production_entries' => ProductionEntry::whereMonth('created_at', now()->month)->count(),
-    //         'last_updated_at' => ProductionEntry::latest('updated_at')
-    //             ->value('updated_at')?->toISOString(),
-    //     ];
-    // }
     public function getProductionStats(?string $date = null): array
     {
         $date = $date ?? now()->toDateString();
@@ -43,6 +34,27 @@ class DashboardService
             'this_month_production_entries' => ProductionEntry::whereMonth('created_at', now()->month)->count(),
             'last_updated_at' => ProductionEntry::latest('updated_at')
                 ->value('updated_at')?->toISOString(),
+        ];
+    }
+
+    public function getMaintenanceStats(): array
+    {
+        /** @var MaintenanceLogService $service */
+        $service = app(MaintenanceLogService::class);
+
+        $summary = $service->getDailyCompletionSummary();
+
+        $totalUnits = $summary->sum('total');
+        $checked = $summary->sum('checked');
+        $unchecked = $summary->sum('unchecked');
+
+        return [
+            'total_units' => $totalUnits,
+            'checked_today' => $checked,
+            'unchecked_today' => $unchecked,
+            'completion' => $totalUnits > 0
+                ? round(($checked / $totalUnits) * 100)
+                : 0,
         ];
     }
 }
