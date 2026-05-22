@@ -6,7 +6,9 @@ use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionEntryController;
+use App\Http\Controllers\SaleController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\EnergyController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -28,6 +30,22 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Production
     Route::apiResource('production-entries', ProductionEntryController::class);
+
+    // Sales - Updated routes
+    Route::prefix('sales')->group(function () {
+        // Get latest sales with optional date range filtering
+        Route::get('/latest', [SaleController::class, 'getLatest']);
+
+        // Get summary with optional date range filtering
+        Route::get('/summary', [SaleController::class, 'getSummary']);
+
+        // Bulk store sales with date
+        Route::post('/bulk', [SaleController::class, 'storeBulk']);
+
+        // Keep the original index for backwards compatibility if needed
+        Route::get('/', [SaleController::class, 'index']);
+        Route::post('/', [SaleController::class, 'store']);
+    });
 
     // Maintenance
     Route::prefix('maintenance')->group(function () {
@@ -72,6 +90,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/logs/user/{user}', [MaintenanceLogController::class, 'userHistory']);
 
         Route::get('/logs/date/{date}', [MaintenanceLogController::class, 'byDate']);
+
     });
 
+    Route::prefix('energy')->group(function () {
+
+        Route::get('/', [EnergyController::class, 'index']);
+
+        Route::post('/bulk', [EnergyController::class, 'storeBulk']);
+
+        Route::get('/month', [EnergyController::class, 'getByMonth']);
+
+        Route::get('/summary', [EnergyController::class, 'getSummary']);
+    });
 });
