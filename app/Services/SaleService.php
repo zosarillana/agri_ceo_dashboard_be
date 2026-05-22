@@ -1,4 +1,5 @@
 <?php
+
 // app/Services/SaleService.php
 
 namespace App\Services;
@@ -6,7 +7,6 @@ namespace App\Services;
 use App\Models\Sale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 class SaleService
 {
@@ -18,37 +18,34 @@ class SaleService
      */
     public function storeBulk(array $rows, ?string $saleDate = null): Collection
     {
-        return DB::transaction(function () use ($rows, $saleDate) {
-            $date  = $saleDate
-                ? Carbon::parse($saleDate)->toDateString()
-                : Carbon::today()->toDateString();
-            $sales = collect();
+        $date = $saleDate
+            ? Carbon::parse($saleDate)->toDateString()
+            : Carbon::today()->toDateString();
 
-            foreach ($rows as $row) {
-                $existing = Sale::where('product_id', $row['product_id'])
-                    ->whereDate('sale_date', $date)
-                    ->first();
+        // Prepare data
+        $data = array_map(function ($row) use ($date) {
+            return [
+                'product_id' => $row['product_id'],
+                'market' => $row['market'],
+                'asp_per_kg' => $row['asp_per_kg'],
+                'quantity_kg' => $row['quantity_kg'],
+                'sale_date' => $date,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }, $rows);
 
-                if ($existing) {
-                    $existing->update([
-                        'market'      => $row['market'],
-                        'asp_per_kg'  => $row['asp_per_kg'],
-                        'quantity_kg' => $row['quantity_kg'],
-                    ]);
-                    $sales->push($existing->fresh());
-                } else {
-                    $sales->push(Sale::create([
-                        'product_id'  => $row['product_id'],
-                        'market'      => $row['market'],
-                        'asp_per_kg'  => $row['asp_per_kg'],
-                        'quantity_kg' => $row['quantity_kg'],
-                        'sale_date'   => $date,
-                    ]));
-                }
-            }
+        // Single query upsert
+        Sale::upsert(
+            $data,
+            ['product_id', 'sale_date'],  // Unique constraint columns
+            ['market', 'asp_per_kg', 'quantity_kg']  // Columns to update
+        );
 
-            return $sales;
-        });
+        // Retrieve the affected records
+        return Sale::where('sale_date', $date)
+            ->whereIn('product_id', array_column($rows, 'product_id'))
+            ->get();
     }
 
     /**
@@ -70,12 +67,12 @@ class SaleService
         $latest = $this->getLatest($from, $to);
 
         return [
-            'total_sales_usd'   => (float) $latest->sum('total_sales_usd'),
+            'total_sales_usd' => (float) $latest->sum('total_sales_usd'),
             'total_quantity_kg' => (float) $latest->sum('quantity_kg'),
-            'export_count'      => $latest->where('market', 'Export')->count(),
-            'local_count'       => $latest->where('market', 'Local')->count(),
-            'from'              => $from,
-            'to'                => $to,
+            'export_count' => $latest->where('market', 'Export')->count(),
+            'local_count' => $latest->where('market', 'Local')->count(),
+            'from' => $from,
+            'to' => $to,
         ];
     }
 }
