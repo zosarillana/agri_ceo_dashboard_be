@@ -219,14 +219,11 @@ class MaintenanceService
             return;
         }
 
-        $statuses = $children->pluck('status');
-
-        // AFTER — all children must be down for parent to be down
+        // Priority: down is worst, then maintenance, then standby, then operational
         $derived = match (true) {
-            $statuses->every(fn ($s) => $s === 'down') => 'down',
-            $statuses->contains('maintenance') => 'operational',
-            $statuses->contains('down') => 'operational',
-            $statuses->contains('standby') => 'operational',
+            $children->contains('status', 'down') => 'down',
+            $children->contains('status', 'maintenance') => 'maintenance',
+            $children->contains('status', 'standby') => 'standby',
             default => 'operational',
         };
 

@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductionEntryController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\EnergyController;
+use App\Http\Controllers\AdminUserController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -102,5 +103,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/month', [EnergyController::class, 'getByMonth']);
 
         Route::get('/summary', [EnergyController::class, 'getSummary']);
+    });
+
+    Route::middleware(['auth:sanctum' /*, 'role:admin' — add your admin guard here */])
+    ->prefix('admin')
+    ->group(function () {
+ 
+        Route::get('/users',          [AdminUserController::class, 'index']);
+        Route::put('/users/update',   [AdminUserController::class, 'update']);
+        Route::delete('/users/delete',[AdminUserController::class, 'destroy']);
+ 
     });
 });
