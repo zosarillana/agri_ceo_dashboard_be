@@ -40,13 +40,14 @@ class AdminUserController extends Controller
             'name'       => 'sometimes|string',
             'email'      => 'sometimes|string|email|unique:users,email,' . $request->id,
             'department' => 'nullable|string',
+            'role'       => 'sometimes|string|in:superadmin,admin,user',
             'password'   => 'nullable|string|min:6|confirmed',
         ]);
 
         $user = User::findOrFail($request->id);
 
         $updatedUser = $this->adminUserService->updateUser($user, $request->only([
-            'name', 'email', 'department', 'password',
+            'name', 'email', 'department', 'role', 'password',
         ]));
 
         return response()->json([

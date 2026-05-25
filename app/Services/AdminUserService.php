@@ -12,7 +12,7 @@ class AdminUserService
      */
     public function getAllUsers()
     {
-        return User::select('id', 'name', 'email', 'department', 'created_at')
+        return User::select('id', 'name', 'email', 'department', 'role', 'created_at')
             ->orderBy('created_at', 'desc')
             ->get();
     }
@@ -25,6 +25,7 @@ class AdminUserService
         $user->name       = $data['name']       ?? $user->name;
         $user->email      = $data['email']      ?? $user->email;
         $user->department = $data['department'] ?? $user->department;
+        $user->role       = $data['role']       ?? $user->role;
 
         if (!empty($data['password'])) {
             $user->password = Hash::make($data['password']);
@@ -32,7 +33,7 @@ class AdminUserService
 
         $user->save();
 
-        return $user->fresh(['id', 'name', 'email', 'department', 'created_at']);
+        return $user->fresh(['id', 'name', 'email', 'department', 'role', 'created_at']);
     }
 
     /**
