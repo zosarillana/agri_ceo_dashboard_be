@@ -123,6 +123,83 @@ class MaintenanceService
             });
     }
 
+<<<<<<< HEAD
+=======
+    /**
+     * Detailed sub-unit breakdown for a single top-level unit.
+     * Useful for a drill-down view (e.g. tap "Liquid Line" → see its sub-units).
+     */
+    public function getUnitWithSubUnitSummary(int $unitId): array
+    {
+        $unit = MaintenanceUnit::active()
+            ->with([
+                'plant',
+                'children' => fn ($q) => $q->active()->orderBy('sort_order'),
+            ])
+            ->findOrFail($unitId);
+
+        return [
+            'unit_id' => $unit->id,
+            'unit_name' => $unit->name,
+            'plant_name' => $unit->plant->name,
+            'status' => $unit->status,
+            'subunit_summary' => $this->countByStatus($unit->children),
+            'subunits' => $unit->children->map(fn ($child) => [
+                'id' => $child->id,
+                'name' => $child->name,
+                'status' => $child->status,
+                'notes' => $child->notes,
+                'last_checked_at' => $child->last_checked_at?->toISOString(),
+                'next_scheduled_at' => $child->next_scheduled_at?->toISOString(),
+            ])->values(),
+        ];
+    }
+
+    // ─── Parent Status Propagation ────────────────────────────────────────────
+
+    /**
+     * Re-derive a parent unit's status from its active children's statuses.
+     *
+     * Priority order (worst first):
+     *   down > maintenance > standby > operational
+     *
+     * This means if even ONE child is "down", the parent becomes "down".
+     * If no children are down but one is "maintenance", parent becomes "maintenance".
+     * Only if all children are operational does the parent become "operational".
+     *
+     * If the parent has no active children (e.g. all deleted), its status is left unchanged.
+     */
+    private function propagateStatusToParent(int $parentId): void
+    {
+        $parent = MaintenanceUnit::with('children')->find($parentId);
+
+        if (! $parent) {
+            return;
+        }
+
+        $children = $parent->children()->active()->get();
+
+        if ($children->isEmpty()) {
+            return;
+        }
+
+        // Priority: down is worst, then maintenance, then standby, then operational
+        $derived = match (true) {
+            $children->contains('status', 'down') => 'down',
+            $children->contains('status', 'maintenance') => 'maintenance',
+            $children->contains('status', 'standby') => 'standby',
+            default => 'operational',
+        };
+
+        $parent->update(['status' => $derived]);
+
+        // If the parent is itself a sub-unit, continue propagating upward.
+        if ($parent->parent_id !== null) {
+            $this->propagateStatusToParent($parent->parent_id);
+        }
+    }
+
+>>>>>>> ec4220db8049756a84f70aa5317bcc33eec94cae
     // ─── Private Formatters ───────────────────────────────────────────────────
 
     private function formatPlant(Plant $plant): array
