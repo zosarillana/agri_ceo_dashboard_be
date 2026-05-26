@@ -2,11 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\EnergyRecord;
+use App\Models\MaintenanceLog;
 use App\Models\MaintenanceUnit;
 use App\Models\ProductionEntry;
 use App\Models\Sale;
-use App\Models\MaintenanceLog;
-use App\Models\EnergyRecord;
+use App\Models\WorkforceRecord;
 use Carbon\Carbon;
 
 class DashboardService
@@ -25,6 +26,7 @@ class DashboardService
             'maintenance' => $this->getMaintenanceStats(),
             'sales' => $this->getSalesStats(),
             'energy' => $this->getEnergyStats($date),
+            'workforce' => $this->getWorkforceStats($date),
         ];
     }
 
@@ -259,26 +261,95 @@ class DashboardService
         return [
             // Current month data (like sales.this_month)
             'current_month' => $currentMonthTotal,
-            
+
             // Previous month data (like sales.last_month)
             'previous_month' => $previousMonthTotal,
-            
+
             // Month-over-month change percentage
             'mom_change_pct' => $momChange,
-            
+
             // Records grouped by account for the current month
             'records' => $recordsByAccount,
-            
+
             // YTD Summary (all time totals)
             'ytd_summary' => $ytdSummary,
-            
+
             // Monthly trends for chart
             'monthly_trends' => $monthlyTrends,
-            
+
             // Metadata
             'total_accounts' => EnergyRecord::distinct('account')->count('account'),
             'total_months' => EnergyRecord::distinct('billing_month')->count('billing_month'),
             'last_updated_at' => $lastUpdated,
+        ];
+    }
+
+    public function getWorkforceStats(?string $date = null): array
+    {
+        $date = $date ?? now()->toDateString();
+
+        // Latest record per department for the given date
+        $sub = WorkforceRecord::query()
+            ->selectRaw('department_key, MAX(record_date) as max_date')
+            ->where('record_date', '<=', $date)
+            ->groupBy('department_key');
+
+        $records = WorkforceRecord::query()
+            ->select('workforce_records.*')
+            ->joinSub($sub, 'latest', function ($join) {
+                $join->on('workforce_records.department_key', '=', 'latest.department_key')
+                    ->on('workforce_records.record_date', '=', 'latest.max_date');
+            })
+            ->orderBy('workforce_records.section')
+            ->orderBy('workforce_records.department_key')
+            ->get();
+
+        $totalPresent = (int) $records->sum('present');
+        $totalHeadcount = (int) $records->sum('headcount');
+        $totalIncidents = (int) $records->sum('incidents');
+        $attendanceRate = $totalHeadcount > 0
+            ? round(($totalPresent / $totalHeadcount) * 100, 1)
+            : null;
+
+        $bySection = $records
+            ->groupBy('section')
+            ->map(fn ($rows) => [
+                'present' => (int) $rows->sum('present'),
+                'headcount' => (int) $rows->sum('headcount'),
+                'incidents' => (int) $rows->sum('incidents'),
+                'rate' => $rows->sum('headcount') > 0
+                    ? round(($rows->sum('present') / $rows->sum('headcount')) * 100, 1)
+                    : null,
+            ]);
+
+        // Lowest-attendance department
+        $lowestDept = $records
+            ->filter(fn ($r) => $r->headcount > 0)
+            ->sortBy(fn ($r) => $r->present / $r->headcount)
+            ->first();
+
+        return [
+            'total_present' => $totalPresent,
+            'total_headcount' => $totalHeadcount,
+            'total_incidents' => $totalIncidents,
+            'attendance_rate' => $attendanceRate,
+            'department_count' => $records->count(),
+            'by_section' => $bySection,
+            'lowest_dept' => $lowestDept ? [
+                'label' => $lowestDept->department_label,
+                'rate' => $lowestDept->attendance_rate,
+            ] : null,
+            'departments' => $records->map(fn ($r) => [
+                'key' => $r->department_key,
+                'label' => $r->department_label,
+                'section' => $r->section,
+                'present' => $r->present,
+                'headcount' => $r->headcount,
+                'incidents' => $r->incidents,
+                'rate' => $r->attendance_rate,
+            ])->values(),
+            'last_updated_at' => WorkforceRecord::latest('updated_at')
+                ->value('updated_at')?->toISOString(),
         ];
     }
 }
