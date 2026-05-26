@@ -17,14 +17,15 @@ class AuthController extends Controller
             'name' => 'required|string',
             'email' => 'required|string|email|unique:users',
             'password' => 'required|string|min:6',
-            'department' => 'nullable|string',
+            'department' => 'nullable|string|in:production,procurement,sales,accounts,trading,quality_control,workforce,maintenance,energy',
+            'role' => 'nullable|string|in:superadmin,admin,user', // Add role validation
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role' => 'user',
+            'role' => $request->role ?? 'user', // Use the role from request, default to 'user'
             'department' => $request->department,
         ]);
 
