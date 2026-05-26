@@ -1,15 +1,16 @@
 <?php
 
+use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EnergyController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionEntryController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\EnergyController;
-use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\WorkforceController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -105,13 +106,29 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/summary', [EnergyController::class, 'getSummary']);
     });
 
-    Route::middleware(['auth:sanctum' /*, 'role:admin' — add your admin guard here */])
-    ->prefix('admin')
-    ->group(function () {
- 
-        Route::get('/users',          [AdminUserController::class, 'index']);
-        Route::put('/users/update',   [AdminUserController::class, 'update']);
-        Route::delete('/users/delete',[AdminUserController::class, 'destroy']);
- 
+    Route::prefix('workforce')->name('workforce.')->group(function () {
+
+        // List latest records + summary
+        Route::get('/', [WorkforceController::class, 'index'])->name('index');
+
+        // Bulk upsert
+        Route::post('/', [WorkforceController::class, 'store'])->name('store');
+
+        // Summary cards only
+        Route::get('/summary', [WorkforceController::class, 'summary'])->name('summary');
+
+        // Department time-series
+        Route::get('/history/{department_key}', [WorkforceController::class, 'history'])->name('history');
+
     });
+
+    Route::middleware(['auth:sanctum' /* , 'role:admin' — add your admin guard here */])
+        ->prefix('admin')
+        ->group(function () {
+
+            Route::get('/users', [AdminUserController::class, 'index']);
+            Route::put('/users/update', [AdminUserController::class, 'update']);
+            Route::delete('/users/delete', [AdminUserController::class, 'destroy']);
+
+        });
 });
