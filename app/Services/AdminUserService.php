@@ -22,18 +22,18 @@ class AdminUserService
      */
     public function updateUser(User $user, array $data): User
     {
-        $user->name       = $data['name']       ?? $user->name;
-        $user->email      = $data['email']      ?? $user->email;
+        $user->name = $data['name'] ?? $user->name;
+        $user->email = $data['email'] ?? $user->email;
         $user->department = $data['department'] ?? $user->department;
-        $user->role       = $data['role']       ?? $user->role;
+        $user->role = $data['role'] ?? $user->role;
 
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $user->password = Hash::make($data['password']);
         }
 
         $user->save();
 
-        return $user->fresh(['id', 'name', 'email', 'department', 'role', 'created_at']);
+        return $user->fresh();
     }
 
     /**

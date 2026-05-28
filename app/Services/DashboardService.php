@@ -53,7 +53,6 @@ class DashboardService
 
     public function getMaintenanceStats(): array
     {
-        // Only top-level units (no subunits) — matches what the UI shows
         $baseQuery = fn () => MaintenanceUnit::active()->whereNull('parent_id');
 
         $statusCounts = $baseQuery()
@@ -72,7 +71,6 @@ class DashboardService
             ->whereHas('logs', fn ($q) => $q->whereDate('checked_at', today()))
             ->count();
 
-        // Use the most recent unit update or log check as the last_updated_at
         $lastUnitUpdate = $baseQuery()->latest('updated_at')->value('updated_at');
         $lastLogUpdate = MaintenanceLog::latest('checked_at')->value('checked_at');
 
@@ -84,9 +82,7 @@ class DashboardService
             'total_units' => $total,
             'checked_today' => $checkedToday,
             'unchecked_today' => $total - $checkedToday,
-            'completion' => $total > 0
-                ? round(($checkedToday / $total) * 100)
-                : 0,
+            'completion' => $total > 0 ? round(($checkedToday / $total) * 100) : 0,
             'status_breakdown' => $statusBreakdown,
             'last_updated_at' => $lastUpdated
                 ? Carbon::parse($lastUpdated)->toISOString()
@@ -102,7 +98,6 @@ class DashboardService
         $lastMonthStart = $now->copy()->subMonth()->startOfMonth()->toDateString();
         $lastMonthEnd = $now->copy()->subMonth()->endOfMonth()->toDateString();
 
-        // This month: sum all sales within the month (not just latest-per-product)
         $thisMonth = Sale::whereDate('sale_date', '>=', $thisMonthStart)
             ->whereDate('sale_date', '<=', $thisMonthEnd)
             ->selectRaw('
@@ -114,7 +109,6 @@ class DashboardService
             ')
             ->first();
 
-        // Last month: same aggregation for comparison
         $lastMonth = Sale::whereDate('sale_date', '>=', $lastMonthStart)
             ->whereDate('sale_date', '<=', $lastMonthEnd)
             ->selectRaw('
@@ -127,12 +121,10 @@ class DashboardService
         $thisUSD = (float) ($thisMonth->total_usd ?? 0);
         $lastUSD = (float) ($lastMonth->total_usd ?? 0);
 
-        // Month-over-month % change, null if no last month data to compare
         $momChange = $lastUSD > 0
             ? round((($thisUSD - $lastUSD) / $lastUSD) * 100, 1)
             : null;
 
-        // Per-month breakdown for the last 6 months (for a chart)
         $monthlyBreakdown = Sale::selectRaw('
                 DATE_FORMAT(sale_date, "%Y-%m") as month,
                 SUM(total_sales_usd)            as total_usd,
@@ -172,22 +164,16 @@ class DashboardService
 
     public function getEnergyStats(?string $date = null): array
     {
-        // Parse the date to get the billing month (same as production uses)
         $billingMonth = $date ? Carbon::parse($date) : now();
         $currentMonthStart = $billingMonth->copy()->startOfMonth()->toDateString();
         $previousMonthStart = $billingMonth->copy()->subMonth()->startOfMonth()->toDateString();
         $previousMonthEnd = $billingMonth->copy()->subMonth()->endOfMonth()->toDateString();
 
-        // Get current month energy records
-        $currentMonthRecords = EnergyRecord::whereDate('billing_month', $currentMonthStart)
-            ->get();
-
-        // Get previous month energy records
+        $currentMonthRecords = EnergyRecord::whereDate('billing_month', $currentMonthStart)->get();
         $previousMonthRecords = EnergyRecord::whereDate('billing_month', '>=', $previousMonthStart)
             ->whereDate('billing_month', '<=', $previousMonthEnd)
             ->get();
 
-        // Calculate current month totals
         $currentMonthTotal = [
             'total_billed' => (float) $currentMonthRecords->sum('billed_amount'),
             'total_kw' => (float) $currentMonthRecords->sum('kw'),
@@ -200,7 +186,6 @@ class DashboardService
             'month' => $billingMonth->format('Y-m'),
         ];
 
-        // Calculate previous month totals
         $previousMonthTotal = [
             'total_billed' => (float) $previousMonthRecords->sum('billed_amount'),
             'total_kw' => (float) $previousMonthRecords->sum('kw'),
@@ -211,7 +196,6 @@ class DashboardService
             'month' => $billingMonth->copy()->subMonth()->format('Y-m'),
         ];
 
-        // Calculate month-over-month change
         $momChange = null;
         if ($previousMonthTotal['total_billed'] > 0) {
             $momChange = round(
@@ -220,13 +204,11 @@ class DashboardService
             );
         }
 
-        // Get records grouped by account for the current month
         $recordsByAccount = [
             'account2' => $currentMonthRecords->where('account', 'account2')->values(),
             'account3' => $currentMonthRecords->where('account', 'account3')->values(),
         ];
 
-        // Get monthly trends for the last 6 months (for chart)
         $monthlyTrends = EnergyRecord::selectRaw('
                 DATE_FORMAT(billing_month, "%Y-%m") as month,
                 SUM(billed_amount) as total_billed,
@@ -244,7 +226,6 @@ class DashboardService
                 'total_demand' => (float) $row->total_demand,
             ]);
 
-        // Get YTD totals (all time summary)
         $allRecords = EnergyRecord::all();
         $ytdSummary = [
             'total_billed_amount' => (float) $allRecords->sum('billed_amount'),
@@ -254,33 +235,17 @@ class DashboardService
             'account3_total' => (float) $allRecords->where('account', 'account3')->sum('billed_amount'),
         ];
 
-        // Get latest update timestamp
-        $lastUpdated = EnergyRecord::latest('updated_at')
-            ->value('updated_at')?->toISOString();
-
         return [
-            // Current month data (like sales.this_month)
             'current_month' => $currentMonthTotal,
-
-            // Previous month data (like sales.last_month)
             'previous_month' => $previousMonthTotal,
-
-            // Month-over-month change percentage
             'mom_change_pct' => $momChange,
-
-            // Records grouped by account for the current month
             'records' => $recordsByAccount,
-
-            // YTD Summary (all time totals)
             'ytd_summary' => $ytdSummary,
-
-            // Monthly trends for chart
             'monthly_trends' => $monthlyTrends,
-
-            // Metadata
             'total_accounts' => EnergyRecord::distinct('account')->count('account'),
             'total_months' => EnergyRecord::distinct('billing_month')->count('billing_month'),
-            'last_updated_at' => $lastUpdated,
+            'last_updated_at' => EnergyRecord::latest('updated_at')
+                ->value('updated_at')?->toISOString(),
         ];
     }
 
@@ -288,21 +253,30 @@ class DashboardService
     {
         $date = $date ?? now()->toDateString();
 
-        // Latest record per department for the given date
-        $sub = WorkforceRecord::query()
-            ->selectRaw('department_key, MAX(record_date) as max_date')
-            ->where('record_date', '<=', $date)
-            ->groupBy('department_key');
-
+        // Only fetch records for the exact requested date (no fallback to prior dates).
+        // If no attendance has been recorded yet for that date, return a zeroed response.
         $records = WorkforceRecord::query()
-            ->select('workforce_records.*')
-            ->joinSub($sub, 'latest', function ($join) {
-                $join->on('workforce_records.department_key', '=', 'latest.department_key')
-                    ->on('workforce_records.record_date', '=', 'latest.max_date');
-            })
-            ->orderBy('workforce_records.section')
-            ->orderBy('workforce_records.department_key')
+            ->where('record_date', $date)
+            ->orderBy('section')
+            ->orderBy('department_key')
             ->get();
+
+        // No attendance recorded for this date yet
+        if ($records->isEmpty()) {
+            return [
+                'total_present' => 0,
+                'total_headcount' => 0,
+                'total_incidents' => 0,
+                'attendance_rate' => null,
+                'department_count' => 0,
+                'by_section' => [],
+                'lowest_dept' => null,
+                'departments' => [],
+                'has_data' => false,
+                'last_updated_at' => WorkforceRecord::latest('updated_at')
+                    ->value('updated_at')?->toISOString(),
+            ];
+        }
 
         $totalPresent = (int) $records->sum('present');
         $totalHeadcount = (int) $records->sum('headcount');
@@ -322,7 +296,6 @@ class DashboardService
                     : null,
             ]);
 
-        // Lowest-attendance department
         $lowestDept = $records
             ->filter(fn ($r) => $r->headcount > 0)
             ->sortBy(fn ($r) => $r->present / $r->headcount)
@@ -348,6 +321,7 @@ class DashboardService
                 'incidents' => $r->incidents,
                 'rate' => $r->attendance_rate,
             ])->values(),
+            'has_data' => true,
             'last_updated_at' => WorkforceRecord::latest('updated_at')
                 ->value('updated_at')?->toISOString(),
         ];
