@@ -8,6 +8,7 @@ use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionEntryController;
+use App\Http\Controllers\QcController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkforceController;
@@ -131,4 +132,12 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/users/delete', [AdminUserController::class, 'destroy']);
 
         });
+
+    Route::prefix('qc')->group(function () {
+        Route::get('/', [QcController::class, 'index']);
+        Route::post('/', [QcController::class, 'store']);
+        Route::post('/bulk', [QcController::class, 'storeBulk']);
+        Route::get('/latest', [QcController::class, 'getLatest']);
+        Route::get('/summary', [QcController::class, 'getSummary']);
+    });
 });
