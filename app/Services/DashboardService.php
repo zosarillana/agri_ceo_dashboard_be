@@ -14,6 +14,7 @@ use Carbon\Carbon;
 class DashboardService
 {
     protected EnergyService $energyService;
+
     protected QcService $qcService;
 
     public function __construct(EnergyService $energyService, QcService $qcService)
@@ -333,26 +334,27 @@ class DashboardService
 
     /**
      * Get Quality Control statistics for the dashboard.
-     * By default shows current month data, can be overridden with date parameter.
+     * Now properly filters by specific date for daily data.
      */
     public function getQcStats(?string $date = null): array
     {
         $targetDate = $date ? Carbon::parse($date) : now();
-        
-        // Get current month range
+        $targetDateString = $targetDate->toDateString();
+
+        // Get current month range (based on the target date's month)
         $currentMonthStart = $targetDate->copy()->startOfMonth()->toDateString();
         $currentMonthEnd = $targetDate->copy()->endOfMonth()->toDateString();
-        
+
         // Get previous month range for comparison
         $previousMonthStart = $targetDate->copy()->subMonth()->startOfMonth()->toDateString();
         $previousMonthEnd = $targetDate->copy()->subMonth()->endOfMonth()->toDateString();
-        
+
         // Get current month summary
         $currentMonthSummary = $this->qcService->getSummary($currentMonthStart, $currentMonthEnd);
-        
+
         // Get previous month summary for comparison
         $previousMonthSummary = $this->qcService->getSummary($previousMonthStart, $previousMonthEnd);
-        
+
         // Calculate month-over-month change for pass rate
         $momPassRateChange = null;
         if ($previousMonthSummary['pass_rate'] > 0) {
@@ -361,10 +363,10 @@ class DashboardService
                 2
             );
         }
-        
+
         // Get weekly breakdown for current month
         $weeklyBreakdown = $this->getWeeklyQcBreakdown($currentMonthStart, $currentMonthEnd);
-        
+
         // Get latest QC records for current month (top 5 by tested samples)
         $latestRecords = $this->qcService->getLatest($currentMonthStart, $currentMonthEnd)
             ->sortByDesc('tested')
@@ -375,12 +377,12 @@ class DashboardService
                 'tested' => $record->tested,
                 'passed' => $record->passed,
                 'failed' => $record->tested - $record->passed,
-                'pass_rate' => $record->tested > 0 
+                'pass_rate' => $record->tested > 0
                     ? round(($record->passed / $record->tested) * 100, 2)
                     : 0,
                 'qc_date' => $record->qc_date,
             ]);
-        
+
         // Get daily trend for current month
         $dailyTrend = QcRecord::whereBetween('qc_date', [$currentMonthStart, $currentMonthEnd])
             ->selectRaw('qc_date, SUM(tested) as total_tested, SUM(passed) as total_passed')
@@ -396,7 +398,21 @@ class DashboardService
                     ? round(($day->total_passed / $day->total_tested) * 100, 2)
                     : 0,
             ]);
-        
+
+        // FIXED: Get data for the specific requested date (not hardcoded to now())
+        $requestedDayData = $dailyTrend->firstWhere('date', $targetDateString);
+
+        // If no data for the requested date, create a zeroed entry
+        if (! $requestedDayData) {
+            $requestedDayData = [
+                'date' => $targetDateString,
+                'tested' => 0,
+                'passed' => 0,
+                'failed' => 0,
+                'pass_rate' => 0,
+            ];
+        }
+
         // Get product performance summary
         $productPerformance = $this->qcService->getLatest($currentMonthStart, $currentMonthEnd)
             ->map(fn ($record) => [
@@ -410,8 +426,34 @@ class DashboardService
             ])
             ->sortByDesc('tested')
             ->values();
-        
+
+        // Get monthly breakdown for historical navigation
+        $monthlyBreakdown = QcRecord::selectRaw('
+                DATE_FORMAT(qc_date, "%Y-%m") as month,
+                SUM(tested) as samples_tested,
+                SUM(passed) as samples_passed,
+                COUNT(DISTINCT product_id) as products_tested
+            ')
+            ->where('qc_date', '>=', $targetDate->copy()->subMonths(5)->startOfMonth())
+            ->groupByRaw('DATE_FORMAT(qc_date, "%Y-%m")')
+            ->orderBy('month')
+            ->get()
+            ->map(fn ($row) => [
+                'month' => $row->month,
+                'samples_tested' => (int) $row->samples_tested,
+                'samples_passed' => (int) $row->samples_passed,
+                'samples_failed' => (int) ($row->samples_tested - $row->samples_passed),
+                'pass_rate' => $row->samples_tested > 0
+                    ? round(($row->samples_passed / $row->samples_tested) * 100, 2)
+                    : 0,
+                'rejection_rate' => $row->samples_tested > 0
+                    ? round((($row->samples_tested - $row->samples_passed) / $row->samples_tested) * 100, 2)
+                    : 0,
+                'products_tested' => (int) $row->products_tested,
+            ]);
+
         return [
+            'today' => $requestedDayData, // FIXED: Now returns data for the requested date
             'current_month' => [
                 'samples_tested' => $currentMonthSummary['samples_tested'],
                 'samples_passed' => $currentMonthSummary['samples_passed'],
@@ -433,6 +475,7 @@ class DashboardService
             'mom_pass_rate_change' => $momPassRateChange,
             'weekly_breakdown' => $weeklyBreakdown,
             'daily_trend' => $dailyTrend,
+            'monthly_breakdown' => $monthlyBreakdown, // Added for historical navigation
             'top_products' => $latestRecords,
             'product_performance' => $productPerformance,
             'has_data' => $currentMonthSummary['samples_tested'] > 0,
@@ -440,7 +483,7 @@ class DashboardService
                 ->value('updated_at')?->toISOString(),
         ];
     }
-    
+
     /**
      * Get weekly breakdown of QC data for a date range.
      */
@@ -448,28 +491,28 @@ class DashboardService
     {
         $start = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
-        
+
         $weeks = [];
         $current = $start->copy();
-        
+
         while ($current <= $end) {
             $weekStart = $current->copy()->startOfWeek();
             $weekEnd = $current->copy()->endOfWeek();
-            
+
             // Adjust week end to not exceed the month end
             if ($weekEnd > $end) {
                 $weekEnd = $end->copy();
             }
-            
+
             $weekData = QcRecord::whereBetween('qc_date', [$weekStart->toDateString(), $weekEnd->toDateString()])
                 ->selectRaw('SUM(tested) as total_tested, SUM(passed) as total_passed')
                 ->first();
-            
+
             $tested = (int) ($weekData->total_tested ?? 0);
             $passed = (int) ($weekData->total_passed ?? 0);
-            
+
             $weeks[] = [
-                'week' => 'Week ' . $current->weekOfMonth,
+                'week' => 'Week '.$current->weekOfMonth,
                 'start_date' => $weekStart->toDateString(),
                 'end_date' => $weekEnd->toDateString(),
                 'tested' => $tested,
@@ -477,10 +520,10 @@ class DashboardService
                 'failed' => $tested - $passed,
                 'pass_rate' => $tested > 0 ? round(($passed / $tested) * 100, 2) : 0,
             ];
-            
+
             $current->addWeek();
         }
-        
+
         return $weeks;
     }
 }
