@@ -14,13 +14,23 @@ use Carbon\Carbon;
 class DashboardService
 {
     protected EnergyService $energyService;
-
     protected QcService $qcService;
+    protected ProcurementService $procurementService;
+    protected TradeService $tradeService;
+    protected AccountService $accountService;
 
-    public function __construct(EnergyService $energyService, QcService $qcService)
-    {
+    public function __construct(
+        EnergyService $energyService,
+        QcService $qcService,
+        ProcurementService $procurementService,
+        TradeService $tradeService,
+        AccountService $accountService
+    ) {
         $this->energyService = $energyService;
         $this->qcService = $qcService;
+        $this->procurementService = $procurementService;
+        $this->tradeService = $tradeService;
+        $this->accountService = $accountService;
     }
 
     public function getDashboardStats(?string $date = null): array
@@ -32,6 +42,9 @@ class DashboardService
             'energy' => $this->getEnergyStats($date),
             'workforce' => $this->getWorkforceStats($date),
             'qc' => $this->getQcStats($date),
+            'procurement' => $this->getProcurementStats($date),
+            'trades' => $this->getTradeStats($date),
+            'accounts' => $this->getAccountStats($date),
         ];
     }
 
@@ -525,5 +538,57 @@ class DashboardService
         }
 
         return $weeks;
+    }
+
+    /**
+     * Get Procurement statistics for the dashboard.
+     */
+    public function getProcurementStats(?string $date = null): array
+    {
+        $targetDate = $date ? Carbon::parse($date) : now();
+        $from = $targetDate->copy()->startOfMonth()->toDateString();
+        $to = $targetDate->copy()->endOfMonth()->toDateString();
+
+        $summary = $this->procurementService->getSummary($from, $to);
+
+        return array_merge($summary, [
+            'has_data' => $summary['total_items'] > 0,
+            'month' => $targetDate->format('Y-m'),
+        ]);
+    }
+
+    /**
+     * Get Trade statistics for the dashboard.
+     */
+    public function getTradeStats(?string $date = null): array
+    {
+        $targetDate = $date ? Carbon::parse($date) : now();
+        $from = $targetDate->copy()->startOfMonth()->toDateString();
+        $to = $targetDate->copy()->endOfMonth()->toDateString();
+
+        $summary = $this->tradeService->getSummary($from, $to);
+
+        return array_merge($summary, [
+            'has_data' => $summary['total_orders'] > 0,
+            'month' => $targetDate->format('Y-m'),
+        ]);
+    }
+
+    /**
+     * Get Account/Financial statistics for the dashboard.
+     */
+    public function getAccountStats(?string $date = null): array
+    {
+        $targetDate = $date ? Carbon::parse($date) : now();
+        $from = $targetDate->copy()->startOfMonth()->toDateString();
+        $to = $targetDate->copy()->endOfMonth()->toDateString();
+
+        $summary = $this->accountService->getSummary($from, $to);
+        $hasData = ($summary['total_receivable'] + $summary['total_payable'] + $summary['total_capex'] + $summary['total_opex']) > 0;
+
+        return array_merge($summary, [
+            'has_data' => $hasData,
+            'month' => $targetDate->format('Y-m'),
+        ]);
     }
 }
