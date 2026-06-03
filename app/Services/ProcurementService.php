@@ -43,21 +43,54 @@ class ProcurementService
         ]);
     }
 
+    public function update(int $id, array $data): Procurement
+    {
+        $procurement = Procurement::findOrFail($id);
+        
+        $procurement->update([
+            'product_id'       => $data['product_id'] ?? $procurement->product_id,
+            'item_name'        => $data['item_name'] ?? $procurement->item_name,
+            'supplier'         => $data['supplier'] ?? $procurement->supplier,
+            'quantity'         => $data['quantity'] ?? $procurement->quantity,
+            'unit'             => $data['unit'] ?? $procurement->unit,
+            'status'           => $data['status'] ?? $procurement->status,
+            'procurement_date' => $data['procurement_date'] ?? $procurement->procurement_date,
+        ]);
+        
+        return $procurement->fresh();
+    }
+
     public function storeBulk(array $rows, ?string $date = null): Collection
     {
         $procurementDate = $date ?? now()->toDateString();
         $saved = collect();
 
         foreach ($rows as $row) {
-            $saved->push(Procurement::create([
-                'product_id'       => $row['product_id'] ?? null,
-                'item_name'        => $row['item_name'],
-                'supplier'         => $row['supplier'] ?? null,
-                'quantity'         => $row['quantity'],
-                'unit'             => $row['unit'] ?? 'kg',
-                'status'           => $row['status'] ?? 'pending',
-                'procurement_date' => $procurementDate,
-            ]));
+            // Check if this is an update (has 'id' field)
+            if (isset($row['id']) && !empty($row['id'])) {
+                // Update existing record
+                $procurement = $this->update($row['id'], [
+                    'product_id'       => $row['product_id'] ?? null,
+                    'item_name'        => $row['item_name'],
+                    'supplier'         => $row['supplier'] ?? null,
+                    'quantity'         => $row['quantity'],
+                    'unit'             => $row['unit'] ?? 'kg',
+                    'status'           => $row['status'] ?? 'pending',
+                    'procurement_date' => $procurementDate,
+                ]);
+                $saved->push($procurement);
+            } else {
+                // Create new record
+                $saved->push(Procurement::create([
+                    'product_id'       => $row['product_id'] ?? null,
+                    'item_name'        => $row['item_name'],
+                    'supplier'         => $row['supplier'] ?? null,
+                    'quantity'         => $row['quantity'],
+                    'unit'             => $row['unit'] ?? 'kg',
+                    'status'           => $row['status'] ?? 'pending',
+                    'procurement_date' => $procurementDate,
+                ]));
+            }
         }
 
         return $saved;
