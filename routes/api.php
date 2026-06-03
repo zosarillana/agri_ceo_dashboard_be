@@ -9,6 +9,7 @@ use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionEntryController;
+use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\QcController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\TradeController;
@@ -167,5 +168,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{account}', [AccountController::class, 'update']);
         Route::delete('/{account}', [AccountController::class, 'destroy']);
         Route::patch('/{account}/paid', [AccountController::class, 'markPaid']);
+    });
+
+    Route::prefix('procurement')->group(function () {
+        Route::get('/', [ProcurementController::class, 'index']);
+        Route::get('/summary', [ProcurementController::class, 'summary']);
+        Route::post('/', [ProcurementController::class, 'store']);
+        Route::post('/bulk', [ProcurementController::class, 'storeBulk']);
     });
 });
