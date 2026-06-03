@@ -3,15 +3,19 @@
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EnergyController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionEntryController;
+use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\QcController;
 use App\Http\Controllers\SaleController;
+use App\Http\Controllers\TradeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkforceController;
+use App\Http\Controllers\AccountController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -131,6 +135,11 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/users/update', [AdminUserController::class, 'update']);
             Route::delete('/users/delete', [AdminUserController::class, 'destroy']);
 
+            Route::apiResource('departments', DepartmentController::class);
+
+            // Extra: list users belonging to a department
+            Route::get('departments/{department}/users', [DepartmentController::class, 'users'])
+                ->name('departments.users');
         });
 
     Route::prefix('qc')->group(function () {
@@ -139,5 +148,32 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/bulk', [QcController::class, 'storeBulk']);
         Route::get('/latest', [QcController::class, 'getLatest']);
         Route::get('/summary', [QcController::class, 'getSummary']);
+    });
+
+    Route::prefix('trades')->group(function () {
+        Route::get('/', [TradeController::class, 'index']);
+        Route::get('/latest', [TradeController::class, 'getLatest']);
+        Route::get('/summary', [TradeController::class, 'getSummary']);
+        Route::post('/', [TradeController::class, 'store']);
+        Route::post('/bulk', [TradeController::class, 'storeBulk']);
+        Route::get('/{id}', [TradeController::class, 'show']);
+        Route::put('/{id}', [TradeController::class, 'update']);
+        Route::delete('/{id}', [TradeController::class, 'destroy']);
+    });
+
+    Route::prefix('accounts')->group(function () {
+        Route::get('/', [AccountController::class, 'index']);
+        Route::get('/summary', [AccountController::class, 'summary']);
+        Route::post('/', [AccountController::class, 'store']);
+        Route::put('/{account}', [AccountController::class, 'update']);
+        Route::delete('/{account}', [AccountController::class, 'destroy']);
+        Route::patch('/{account}/paid', [AccountController::class, 'markPaid']);
+    });
+
+    Route::prefix('procurement')->group(function () {
+        Route::get('/', [ProcurementController::class, 'index']);
+        Route::get('/summary', [ProcurementController::class, 'summary']);
+        Route::post('/', [ProcurementController::class, 'store']);
+        Route::post('/bulk', [ProcurementController::class, 'storeBulk']);
     });
 });

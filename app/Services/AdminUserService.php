@@ -12,7 +12,8 @@ class AdminUserService
      */
     public function getAllUsers()
     {
-        return User::select('id', 'name', 'email', 'department', 'role', 'created_at')
+        return User::select('id', 'name', 'email', 'role', 'created_at')
+            ->with('departments:id,name')
             ->orderBy('created_at', 'desc')
             ->get();
     }
@@ -24,7 +25,6 @@ class AdminUserService
     {
         $user->name = $data['name'] ?? $user->name;
         $user->email = $data['email'] ?? $user->email;
-        $user->department = $data['department'] ?? $user->department;
         $user->role = $data['role'] ?? $user->role;
 
         if (! empty($data['password'])) {
@@ -32,6 +32,11 @@ class AdminUserService
         }
 
         $user->save();
+
+        // ✅ THIS is how you update departments now
+        if (isset($data['department_ids'])) {
+            $user->departments()->sync($data['department_ids']);
+        }
 
         return $user->fresh();
     }

@@ -36,23 +36,24 @@ class AdminUserController extends Controller
     public function update(Request $request)
     {
         $request->validate([
-            'id'         => 'required|integer|exists:users,id',
-            'name'       => 'sometimes|string',
-            'email'      => 'sometimes|string|email|unique:users,email,' . $request->id,
-            'department' => 'nullable|string',
-            'role'       => 'sometimes|string|in:superadmin,admin,user',
-            'password'   => 'nullable|string|min:6|confirmed',
+            'id' => 'required|integer|exists:users,id',
+            'name' => 'sometimes|string',
+            'email' => 'sometimes|string|email|unique:users,email,'.$request->id,
+            'role' => 'sometimes|string|in:superadmin,admin,user',
+            'password' => 'nullable|string|min:6|confirmed',
+            'department_ids' => 'nullable|array',        // ← add
+            'department_ids.*' => 'exists:departments,id', // ← add
         ]);
 
         $user = User::findOrFail($request->id);
 
         $updatedUser = $this->adminUserService->updateUser($user, $request->only([
-            'name', 'email', 'department', 'role', 'password',
+            'name', 'email', 'role', 'password', 'department_ids', // ← add department_ids, remove old 'department'
         ]));
 
         return response()->json([
             'message' => 'User updated successfully.',
-            'user'    => $updatedUser,
+            'user' => $updatedUser,
         ]);
     }
 
