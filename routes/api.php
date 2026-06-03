@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\DashboardController;
@@ -7,15 +8,14 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EnergyController;
 use App\Http\Controllers\MaintenanceController;
 use App\Http\Controllers\MaintenanceLogController;
+use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductionEntryController;
-use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\QcController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\TradeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkforceController;
-use App\Http\Controllers\AccountController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -170,10 +170,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/{account}/paid', [AccountController::class, 'markPaid']);
     });
 
+    // Procurement routes - ADD THEM HERE (same level as other routes)
     Route::prefix('procurement')->group(function () {
         Route::get('/', [ProcurementController::class, 'index']);
         Route::get('/summary', [ProcurementController::class, 'summary']);
         Route::post('/', [ProcurementController::class, 'store']);
+        Route::put('/{id}', [ProcurementController::class, 'update']);
         Route::post('/bulk', [ProcurementController::class, 'storeBulk']);
     });
 });

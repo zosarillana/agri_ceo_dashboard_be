@@ -57,10 +57,34 @@ class ProcurementController extends Controller
         return response()->json($procurement, 201);
     }
 
+    /**
+     * Update a single procurement record
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'item_name'        => 'sometimes|required|string|max:255',
+            'product_id'       => 'nullable|exists:products,id',
+            'supplier'         => 'nullable|string|max:255',
+            'quantity'         => 'sometimes|required|numeric|min:0',
+            'unit'             => 'sometimes|required|string|max:20',
+            'status'           => 'sometimes|required|in:received,pending,delayed',
+            'procurement_date' => 'nullable|date',
+        ]);
+
+        $procurement = $this->procurementService->update($id, $data);
+
+        return response()->json([
+            'data' => $procurement,
+            'message' => 'Procurement record updated successfully'
+        ]);
+    }
+
     public function storeBulk(Request $request): JsonResponse
     {
         $request->validate([
             'rows'               => 'required|array|min:1',
+            'rows.*.id'          => 'nullable|integer|exists:procurements,id', // Allow ID for updates
             'rows.*.item_name'   => 'required|string',
             'rows.*.supplier'    => 'nullable|string',
             'rows.*.quantity'    => 'required|numeric',
@@ -74,6 +98,16 @@ class ProcurementController extends Controller
             $request->input('procurement_date')
         );
 
-        return response()->json(['data' => $records]);
+        $updateCount = collect($request->input('rows'))->whereNotNull('id')->count();
+        $newCount = collect($request->input('rows'))->whereNull('id')->count();
+        
+        $message = [];
+        if ($newCount > 0) $message[] = "{$newCount} new record(s) created";
+        if ($updateCount > 0) $message[] = "{$updateCount} record(s) updated";
+        
+        return response()->json([
+            'data' => $records,
+            'message' => implode(' and ', $message) . ' successfully'
+        ]);
     }
 }
