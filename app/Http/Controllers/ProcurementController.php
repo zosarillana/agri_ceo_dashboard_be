@@ -80,11 +80,33 @@ class ProcurementController extends Controller
         ]);
     }
 
+    /**
+     * Delete a procurement record
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        try {
+            $this->procurementService->delete($id);
+            
+            return response()->json([
+                'message' => 'Record deleted successfully'
+            ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'message' => 'Record not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to delete record: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function storeBulk(Request $request): JsonResponse
     {
         $request->validate([
             'rows'               => 'required|array|min:1',
-            'rows.*.id'          => 'nullable|integer|exists:procurements,id', // Allow ID for updates
+            'rows.*.id'          => 'nullable|integer|exists:procurements,id',
             'rows.*.item_name'   => 'required|string',
             'rows.*.supplier'    => 'nullable|string',
             'rows.*.quantity'    => 'required|numeric',
