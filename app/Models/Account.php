@@ -1,10 +1,11 @@
 <?php
+
 // app/Models/Account.php
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class Account extends Model
 {
@@ -18,9 +19,9 @@ class Account extends Model
     ];
 
     protected $casts = [
-        'amount'   => 'decimal:4',
+        'amount' => 'decimal:4',
         'due_date' => 'date',
-        'is_paid'  => 'boolean',
+        'is_paid' => 'boolean',
     ];
 
     // ── Scopes ──────────────────────────────────────────────────────────────
@@ -39,6 +40,13 @@ class Account extends Model
     {
         return $query
             ->when($from, fn ($q) => $q->whereDate('due_date', '>=', $from))
-            ->when($to,   fn ($q) => $q->whereDate('due_date', '<=', $to));
+            ->when($to, fn ($q) => $q->whereDate('due_date', '<=', $to));
+    }
+
+    public function scopeCreatedBetween(Builder $query, ?string $from, ?string $to): Builder
+    {
+        return $query
+            ->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to));
     }
 }
