@@ -1,12 +1,14 @@
 <?php
+
 // app/Http/Controllers/SaleController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\Sale;
 use App\Services\SaleService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class SaleController extends Controller
 {
@@ -24,7 +26,7 @@ class SaleController extends Controller
     {
         $request->validate([
             'from' => 'nullable|date',
-            'to' => 'nullable|date|after_or_equal:from'
+            'to' => 'nullable|date|after_or_equal:from',
         ]);
 
         $sales = $this->saleService->getLatest(
@@ -33,7 +35,7 @@ class SaleController extends Controller
         );
 
         return response()->json([
-            'data' => $sales
+            'data' => $sales,
         ]);
     }
 
@@ -47,7 +49,7 @@ class SaleController extends Controller
             'market' => 'required|in:Export,Local',
             'asp_per_kg' => 'required|numeric|min:0',
             'quantity_kg' => 'required|numeric|min:0',
-            'sale_date' => 'nullable|date|before_or_equal:today'
+            'sale_date' => 'nullable|date|before_or_equal:today',
         ]);
 
         $sale = Sale::create([
@@ -60,7 +62,7 @@ class SaleController extends Controller
 
         return response()->json([
             'message' => 'Sale created successfully',
-            'data' => $sale->load('product')
+            'data' => $sale->load('product'),
         ], 201);
     }
 
@@ -75,7 +77,7 @@ class SaleController extends Controller
             'rows.*.market' => 'required|in:Export,Local',
             'rows.*.asp_per_kg' => 'required|numeric|min:0',
             'rows.*.quantity_kg' => 'required|numeric|min:0',
-            'sale_date' => 'nullable|date|before_or_equal:today'
+            'sale_date' => 'nullable|date|before_or_equal:today',
         ]);
 
         $sales = $this->saleService->storeBulk(
@@ -85,7 +87,7 @@ class SaleController extends Controller
 
         return response()->json([
             'message' => 'Sales saved successfully',
-            'data' => $sales
+            'data' => $sales,
         ]);
     }
 
@@ -96,7 +98,7 @@ class SaleController extends Controller
     {
         $request->validate([
             'from' => 'nullable|date',
-            'to' => 'nullable|date|after_or_equal:from'
+            'to' => 'nullable|date|after_or_equal:from',
         ]);
 
         $sales = $this->saleService->getLatest(
@@ -105,27 +107,35 @@ class SaleController extends Controller
         );
 
         return response()->json([
-            'data' => $sales
+            'data' => $sales,
         ]);
     }
 
     /**
      * Get sales summary with optional date range filtering
      */
+    // In SaleController.php
     public function getSummary(Request $request): JsonResponse
     {
         $request->validate([
             'from' => 'nullable|date',
-            'to' => 'nullable|date|after_or_equal:from'
+            'to' => 'nullable|date|after_or_equal:from',
+            'month' => 'nullable|date_format:Y-m', // Accepts "2026-06"
         ]);
 
-        $summary = $this->saleService->getSummary(
-            $request->input('from'),
-            $request->input('to')
-        );
+        // If month is provided, override from/to
+        if ($request->has('month')) {
+            $from = Carbon::parse($request->month)->startOfMonth()->toDateString();
+            $to = Carbon::parse($request->month)->endOfMonth()->toDateString();
+        } else {
+            $from = $request->input('from');
+            $to = $request->input('to');
+        }
+
+        $summary = $this->saleService->getSummary($from, $to);
 
         return response()->json([
-            'data' => $summary
+            'data' => $summary,
         ]);
     }
 }
