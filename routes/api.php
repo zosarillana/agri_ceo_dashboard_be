@@ -168,6 +168,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{account}', [AccountController::class, 'update']);
         Route::delete('/{account}', [AccountController::class, 'destroy']);
         Route::patch('/{account}/paid', [AccountController::class, 'markPaid']);
+        Route::patch('accounts/{account}/status', [AccountController::class, 'updateStatus']);
     });
 
     // Procurement routes - ADD THEM HERE (same level as other routes)

@@ -15,13 +15,13 @@ class Account extends Model
         'amount',
         'due_date',
         'notes',
-        'is_paid',
+        'status',  // Changed from 'is_paid' to 'status'
     ];
 
     protected $casts = [
         'amount' => 'decimal:4',
         'due_date' => 'date',
-        'is_paid' => 'boolean',
+        'status' => 'string',  // Changed from 'is_paid' => 'boolean'
     ];
 
     // ── Scopes ──────────────────────────────────────────────────────────────
@@ -31,9 +31,20 @@ class Account extends Model
         return $query->where('type', $type);
     }
 
+    // Updated scopes to work with status
     public function scopeUnpaid(Builder $query): Builder
     {
-        return $query->where('is_paid', false);
+        return $query->whereIn('status', ['unpaid', 'delayed', 'pending']);
+    }
+
+    public function scopePaid(Builder $query): Builder
+    {
+        return $query->whereIn('status', ['paid', 'received']);
+    }
+
+    public function scopeByStatus(Builder $query, string $status): Builder
+    {
+        return $query->where('status', $status);
     }
 
     public function scopeDueBetween(Builder $query, ?string $from, ?string $to): Builder
@@ -48,5 +59,16 @@ class Account extends Model
         return $query
             ->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to));
+    }
+
+    // Helper methods
+    public function isPaid(): bool
+    {
+        return in_array($this->status, ['paid', 'received']);
+    }
+
+    public function isUnpaid(): bool
+    {
+        return in_array($this->status, ['unpaid', 'delayed', 'pending']);
     }
 }
