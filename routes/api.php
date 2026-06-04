@@ -178,5 +178,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [ProcurementController::class, 'store']);
         Route::put('/{id}', [ProcurementController::class, 'update']);
         Route::post('/bulk', [ProcurementController::class, 'storeBulk']);
+        Route::delete('/{id}', [ProcurementController::class, 'destroy']);
     });
 });
