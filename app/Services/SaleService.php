@@ -20,13 +20,13 @@ class SaleService
 
         $data = array_map(function ($row) use ($date) {
             return [
-                'product_id' => $row['product_id'],
-                'market' => $row['market'],
-                'asp_per_kg' => $row['asp_per_kg'],
+                'product_id'  => $row['product_id'],
+                'market'      => $row['market'],
+                'asp_per_kg'  => $row['asp_per_kg'],
                 'quantity_kg' => $row['quantity_kg'],
-                'sale_date' => $date,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'sale_date'   => $date,
+                'created_at'  => now(),
+                'updated_at'  => now(),
             ];
         }, $rows);
 
@@ -47,10 +47,9 @@ class SaleService
      */
     public function getLatest(?string $from = null, ?string $to = null): Collection
     {
-        // Default to current month if no date range provided
         if (! $from && ! $to) {
             $from = Carbon::now()->startOfMonth()->toDateString();
-            $to = Carbon::now()->endOfMonth()->toDateString();
+            $to   = Carbon::now()->endOfMonth()->toDateString();
         }
 
         return Sale::with('product')
@@ -63,27 +62,18 @@ class SaleService
      * Summary totals for the matching sales.
      * Defaults to current month if no dates provided.
      */
-    // app/Services/SaleService.php
-
-    // app/Services/SaleService.php
-
     public function getSummary(?string $from = null, ?string $to = null): array
     {
         if (! $from && ! $to) {
             $from = Carbon::now()->startOfMonth()->toDateString();
-            $to = Carbon::now()->endOfMonth()->toDateString();
+            $to   = Carbon::now()->endOfMonth()->toDateString();
         }
 
         $query = Sale::query();
 
-        if ($from) {
-            $query->where('sale_date', '>=', $from);
-        }
-        if ($to) {
-            $query->where('sale_date', '<=', $to);
-        }
+        if ($from) $query->where('sale_date', '>=', $from);
+        if ($to)   $query->where('sale_date', '<=', $to);
 
-        // ✅ Compute total_sales_usd from asp_per_kg * quantity_kg
         $totals = $query->select([
             DB::raw('COALESCE(SUM(quantity_kg), 0) as total_quantity_kg'),
             DB::raw('COALESCE(SUM(asp_per_kg * quantity_kg), 0) as total_sales_usd'),
@@ -91,7 +81,6 @@ class SaleService
             DB::raw('COALESCE(SUM(CASE WHEN market = "Local" THEN 1 ELSE 0 END), 0) as local_count'),
         ])->first();
 
-        // ✅ Same fix for detailed summary
         $detailedSummary = Sale::with('product')
             ->select([
                 'product_id',
@@ -101,19 +90,38 @@ class SaleService
                 DB::raw('ROUND(SUM(asp_per_kg * quantity_kg) / NULLIF(SUM(quantity_kg), 0), 4) as avg_asp_per_kg'),
             ])
             ->when($from, fn ($q) => $q->where('sale_date', '>=', $from))
-            ->when($to, fn ($q) => $q->where('sale_date', '<=', $to))
+            ->when($to,   fn ($q) => $q->where('sale_date', '<=', $to))
             ->groupBy('product_id', 'market')
             ->orderBy('product_id')
             ->get();
 
         return [
-            'total_sales_usd' => (float) $totals->total_sales_usd,
+            'total_sales_usd'   => (float) $totals->total_sales_usd,
             'total_quantity_kg' => (float) $totals->total_quantity_kg,
-            'export_count' => (int) $totals->export_count,
-            'local_count' => (int) $totals->local_count,
-            'detailed_summary' => $detailedSummary,
-            'from' => $from,
-            'to' => $to,
+            'export_count'      => (int) $totals->export_count,
+            'local_count'       => (int) $totals->local_count,
+            'detailed_summary'  => $detailedSummary,
+            'from'              => $from,
+            'to'                => $to,
         ];
+    }
+
+    /**
+     * Delete a sale entry by product_id and sale_date.
+     * Returns true if a record was found and deleted, false if not found.
+     */
+    public function deleteBySaleDate(int $productId, string $saleDate): bool
+    {
+        $sale = Sale::where('product_id', $productId)
+            ->whereDate('sale_date', Carbon::parse($saleDate)->toDateString())
+            ->first();
+
+        if (! $sale) {
+            return false;
+        }
+
+        $sale->delete();
+
+        return true;
     }
 }

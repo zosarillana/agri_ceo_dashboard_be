@@ -52,6 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Keep the original index for backwards compatibility if needed
         Route::get('/', [SaleController::class, 'index']);
         Route::post('/', [SaleController::class, 'store']);
+        Route::delete('/{pro    ductId}', [SaleController::class, 'destroy']);
     });
 
     // Maintenance
