@@ -13,13 +13,9 @@ class MaintenanceLogController extends Controller
         private readonly MaintenanceLogService $logService
     ) {}
 
-    // ─── POST /api/maintenance/units/{unit}/check ─────────────────────────────
     /**
      * Submit a daily check for a unit.
      * Creates a log entry AND updates the unit's current status snapshot.
-     *
-     * Required: status
-     * Optional: notes, checked_at, next_scheduled_at, duration_minutes
      */
     public function submitCheck(Request $request, int $unitId): JsonResponse
     {
@@ -39,7 +35,6 @@ class MaintenanceLogController extends Controller
         ], 201);
     }
 
-    // ─── GET /api/maintenance/units/{unit}/logs ───────────────────────────────
     /**
      * Full log history for a single unit, paginated.
      */
@@ -52,10 +47,8 @@ class MaintenanceLogController extends Controller
         ]);
     }
 
-    // ─── GET /api/maintenance/units/{unit}/logs/history ──────────────────────
     /**
      * Status history for a unit over a date range.
-     * Query params: from (date), to (date)
      */
     public function unitStatusHistory(Request $request, int $unitId): JsonResponse
     {
@@ -75,10 +68,8 @@ class MaintenanceLogController extends Controller
         ]);
     }
 
-    // ─── GET /api/maintenance/logs/today ─────────────────────────────────────
     /**
      * All checks submitted today, grouped by plant.
-     * Main daily monitoring overview endpoint.
      */
     public function today(): JsonResponse
     {
@@ -89,7 +80,6 @@ class MaintenanceLogController extends Controller
         ]);
     }
 
-    // ─── GET /api/maintenance/logs/unchecked ─────────────────────────────────
     /**
      * Units that have NOT been checked today.
      */
@@ -102,10 +92,8 @@ class MaintenanceLogController extends Controller
         ]);
     }
 
-    // ─── GET /api/maintenance/logs/completion ────────────────────────────────
     /**
      * Daily check completion % per plant.
-     * e.g. Unit 1: 5/6 checked (83%)
      */
     public function completion(): JsonResponse
     {
@@ -116,7 +104,6 @@ class MaintenanceLogController extends Controller
         ]);
     }
 
-    // ─── GET /api/maintenance/logs/user/{user} ────────────────────────────────
     /**
      * All checks submitted by a specific user, paginated.
      */
@@ -129,7 +116,10 @@ class MaintenanceLogController extends Controller
         ]);
     }
 
-    public function byDate(string $date)
+    /**
+     * Get checks by specific date.
+     */
+    public function byDate(string $date): JsonResponse
     {
         return response()->json([
             'data' => $this->logService->getByDate($date),

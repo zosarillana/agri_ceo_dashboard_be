@@ -4,34 +4,40 @@
 
 namespace App\Services;
 
+use App\Enum\RealtimeAction;
+use App\Enum\RealtimeModule;
 use App\Models\WorkforceRecord;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class WorkforceService
 {
+    public function __construct(
+        private RealtimeService $realtime
+    ) {}
+
     // Department metadata — single source of truth, mirrors the frontend config
     private const SECTIONS = [
         'DEPARTMENT' => [
-            'opex' => 'OPEX',
-            'hr' => 'HR',
-            'it' => 'IT',
-            'sales' => 'Sales',
-            'finance' => 'Finance',
-            'gen_ops' => 'Gen Ops',
-            'proc_rm' => 'Procurement - RM',
-            'proc_nrm' => 'Procurement - NRM',
+            'opex'             => 'OPEX',
+            'hr'               => 'HR',
+            'it'               => 'IT',
+            'sales'            => 'Sales',
+            'finance'          => 'Finance',
+            'gen_ops'          => 'Gen Ops',
+            'proc_rm'          => 'Procurement - RM',
+            'proc_nrm'         => 'Procurement - NRM',
             'proc_local_sales' => 'Procurement - Local Sales',
-            'project' => 'Project',
-            'field_ops' => 'Field Operations',
-            'business_ops' => 'Business Ops',
-            'engineering' => 'Engineering',
+            'project'          => 'Project',
+            'field_ops'        => 'Field Operations',
+            'business_ops'     => 'Business Ops',
+            'engineering'      => 'Engineering',
         ],
         'DIRECT COST' => [
             'proc_nuts_receiving' => 'Procurement - Nuts Receiving',
-            'prod_dry_process' => 'Production - Dry Process',
-            'prod_liquid_line' => 'Production - Liquid Line',
-            'quality' => 'Quality',
+            'prod_dry_process'    => 'Production - Dry Process',
+            'prod_liquid_line'    => 'Production - Liquid Line',
+            'quality'             => 'Quality',
         ],
     ];
 
@@ -54,38 +60,47 @@ class WorkforceService
 
         $data = array_map(function (array $row) use ($date): array {
             $section = $this->resolveSection($row['department_key']);
-            $label = $this->resolveLabel($row['department_key']);
-            $rate = $row['headcount'] > 0
+            $label   = $this->resolveLabel($row['department_key']);
+            $rate    = $row['headcount'] > 0
                 ? round(($row['present'] / $row['headcount']) * 100, 2)
                 : null;
 
             return [
-                'department_key' => $row['department_key'],
+                'department_key'   => $row['department_key'],
                 'department_label' => $label,
-                'section' => $section,
-                'present' => $row['present'],
-                'headcount' => $row['headcount'],
-                'incidents' => $row['incidents'],
-                'attendance_rate' => $rate,
-                'record_date' => $date,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'section'          => $section,
+                'present'          => $row['present'],
+                'headcount'        => $row['headcount'],
+                'incidents'        => $row['incidents'],
+                'attendance_rate'  => $rate,
+                'record_date'      => $date,
+                'created_at'       => now(),
+                'updated_at'       => now(),
             ];
         }, $rows);
 
-        // Single query upsert — same pattern as SaleService
         WorkforceRecord::upsert(
             $data,
-            ['department_key', 'record_date'],          // unique constraint
-            ['present', 'headcount', 'incidents',        // columns to update
-                'attendance_rate', 'department_label', 'section'],
+            ['department_key', 'record_date'],
+            ['present', 'headcount', 'incidents', 'attendance_rate', 'department_label', 'section'],
         );
 
-        return WorkforceRecord::where('record_date', $date)
+        $saved = WorkforceRecord::where('record_date', $date)
             ->whereIn('department_key', array_column($rows, 'department_key'))
             ->orderBy('section')
             ->orderBy('department_key')
             ->get();
+
+        $this->realtime->emit(
+            RealtimeModule::WORKFORCE,
+            RealtimeAction::BULK_CREATED,
+            [
+                'count' => $saved->count(),
+                'ids'   => $saved->pluck('id')->values(),
+            ]
+        );
+
+        return $saved;
     }
 
     /**
@@ -94,8 +109,8 @@ class WorkforceService
     public function getLatest(?string $from = null, ?string $to = null): Collection
     {
         return WorkforceRecord::latestPerDepartment($from, $to)
-            ->orderBy('workforce_records.section')           // ← table-qualified
-            ->orderBy('workforce_records.department_key')    // ← table-qualified
+            ->orderBy('workforce_records.section')
+            ->orderBy('workforce_records.department_key')
             ->get();
     }
 
@@ -106,31 +121,31 @@ class WorkforceService
     {
         $latest = $this->getLatest($from, $to);
 
-        $totalPresent = $latest->sum('present');
+        $totalPresent   = $latest->sum('present');
         $totalHeadcount = $latest->sum('headcount');
         $totalIncidents = $latest->sum('incidents');
-        $overallRate = $totalHeadcount > 0
+        $overallRate    = $totalHeadcount > 0
             ? round(($totalPresent / $totalHeadcount) * 100, 2)
             : null;
 
         return [
-            'total_present' => $totalPresent,
-            'total_headcount' => $totalHeadcount,
-            'total_incidents' => $totalIncidents,
-            'attendance_rate' => $overallRate,
+            'total_present'    => $totalPresent,
+            'total_headcount'  => $totalHeadcount,
+            'total_incidents'  => $totalIncidents,
+            'attendance_rate'  => $overallRate,
             'department_count' => $latest->count(),
-            'by_section' => $latest
+            'by_section'       => $latest
                 ->groupBy('section')
                 ->map(fn (Collection $rows) => [
-                    'present' => $rows->sum('present'),
+                    'present'   => $rows->sum('present'),
                     'headcount' => $rows->sum('headcount'),
                     'incidents' => $rows->sum('incidents'),
-                    'rate' => $rows->sum('headcount') > 0
+                    'rate'      => $rows->sum('headcount') > 0
                         ? round(($rows->sum('present') / $rows->sum('headcount')) * 100, 2)
                         : null,
                 ]),
             'from' => $from,
-            'to' => $to,
+            'to'   => $to,
         ];
     }
 
@@ -144,7 +159,7 @@ class WorkforceService
     ): Collection {
         return WorkforceRecord::where('department_key', $departmentKey)
             ->when($from, fn ($q) => $q->where('record_date', '>=', $from))
-            ->when($to, fn ($q) => $q->where('record_date', '<=', $to))
+            ->when($to,   fn ($q) => $q->where('record_date', '<=', $to))
             ->orderBy('record_date')
             ->get();
     }
@@ -159,7 +174,7 @@ class WorkforceService
             }
         }
 
-        return 'DEPARTMENT'; // safe fallback
+        return 'DEPARTMENT';
     }
 
     private function resolveLabel(string $key): string
@@ -170,6 +185,6 @@ class WorkforceService
             }
         }
 
-        return $key; // fallback to key itself
+        return $key;
     }
 }

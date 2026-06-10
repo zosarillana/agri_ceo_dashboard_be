@@ -1,8 +1,11 @@
 <?php
+
 // app/Services/EnergyService.php
 
 namespace App\Services;
 
+use App\Enum\RealtimeAction;
+use App\Enum\RealtimeModule;
 use App\Models\EnergyRecord;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -10,6 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class EnergyService
 {
+    public function __construct(
+        private RealtimeService $realtime
+    ) {}
+
     /**
      * Smart bulk save:
      * upsert by (account, billing_month)
@@ -41,8 +48,8 @@ class EnergyService
                 if ($existing) {
 
                     $existing->update([
-                        'kw'            => $row['kw'],
-                        'demand'        => $row['demand'],
+                        'kw' => $row['kw'],
+                        'demand' => $row['demand'],
                         'billed_amount' => $row['billedAmount'],
                     ]);
 
@@ -52,15 +59,24 @@ class EnergyService
 
                     $saved->push(
                         EnergyRecord::create([
-                            'account'        => $row['account'],
-                            'billing_month'  => $billingMonth,
-                            'kw'             => $row['kw'],
-                            'demand'         => $row['demand'],
-                            'billed_amount'  => $row['billedAmount'],
+                            'account' => $row['account'],
+                            'billing_month' => $billingMonth,
+                            'kw' => $row['kw'],
+                            'demand' => $row['demand'],
+                            'billed_amount' => $row['billedAmount'],
                         ])
                     );
                 }
             }
+
+            $this->realtime->emit(
+                RealtimeModule::ENERGY,
+                RealtimeAction::BULK_CREATED,
+                [
+                    'count' => $saved->count(),
+                    'ids' => $saved->pluck('id')->values(),
+                ]
+            );
 
             return $saved;
         });
@@ -117,8 +133,8 @@ class EnergyService
 
         return [
             'total_billed_amount' => (float) $records->sum('billed_amount'),
-            'total_kw'            => (float) $records->sum('kw'),
-            'total_demand'        => (float) $records->sum('demand'),
+            'total_kw' => (float) $records->sum('kw'),
+            'total_demand' => (float) $records->sum('demand'),
 
             'account2_total' => (float) $records
                 ->where('account', 'account2')

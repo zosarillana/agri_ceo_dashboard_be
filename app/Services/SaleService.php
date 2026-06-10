@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enum\RealtimeAction;
+use App\Enum\RealtimeModule;
 use App\Models\Sale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -9,6 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class SaleService
 {
+    public function __construct(
+        private RealtimeService $realtime
+    ) {}
+
     /**
      * Smart bulk save: upsert by (product_id, sale_date).
      */
@@ -36,9 +42,20 @@ class SaleService
             ['market', 'asp_per_kg', 'quantity_kg']
         );
 
-        return Sale::where('sale_date', $date)
+        $saved = Sale::where('sale_date', $date)
             ->whereIn('product_id', array_column($rows, 'product_id'))
             ->get();
+
+        $this->realtime->emit(
+            RealtimeModule::SALE,
+            RealtimeAction::BULK_CREATED,
+            [
+                'count' => $saved->count(),
+                'ids'   => $saved->pluck('id')->values(),
+            ]
+        );
+
+        return $saved;
     }
 
     /**
@@ -120,7 +137,14 @@ class SaleService
             return false;
         }
 
+        $id = $sale->id;
         $sale->delete();
+
+        $this->realtime->emit(
+            RealtimeModule::SALE,
+            RealtimeAction::DELETED,
+            ['id' => $id]
+        );
 
         return true;
     }

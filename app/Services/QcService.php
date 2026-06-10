@@ -3,12 +3,18 @@
 
 namespace App\Services;
 
+use App\Enum\RealtimeAction;
+use App\Enum\RealtimeModule;
 use App\Models\QcRecord;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class QcService
 {
+    public function __construct(
+        private RealtimeService $realtime
+    ) {}
+
     /**
      * Smart bulk save: upsert by (product_id, qc_date).
      *
@@ -32,14 +38,25 @@ class QcService
 
         QcRecord::upsert(
             $data,
-            ['product_id', 'qc_date'],   // unique keys
-            ['tested', 'passed']          // columns to update on conflict
+            ['product_id', 'qc_date'],
+            ['tested', 'passed']
         );
 
-        return QcRecord::with('product')
+        $saved = QcRecord::with('product')
             ->where('qc_date', $date)
             ->whereIn('product_id', array_column($rows, 'product_id'))
             ->get();
+
+        $this->realtime->emit(
+            RealtimeModule::QC,
+            RealtimeAction::BULK_CREATED,
+            [
+                'count' => $saved->count(),
+                'ids'   => $saved->pluck('id')->values(),
+            ]
+        );
+
+        return $saved;
     }
 
     /**
@@ -65,18 +82,18 @@ class QcService
         $totalFailed = $totalTested - $totalPassed;
 
         return [
-            'samples_tested'   => $totalTested,
-            'samples_passed'   => $totalPassed,
-            'samples_failed'   => $totalFailed,
-            'pass_rate'        => $totalTested > 0
+            'samples_tested'  => $totalTested,
+            'samples_passed'  => $totalPassed,
+            'samples_failed'  => $totalFailed,
+            'pass_rate'       => $totalTested > 0
                                     ? round(($totalPassed / $totalTested) * 100, 4)
                                     : 0,
-            'rejection_rate'   => $totalTested > 0
+            'rejection_rate'  => $totalTested > 0
                                     ? round(($totalFailed / $totalTested) * 100, 4)
                                     : 0,
-            'products_tested'  => $latest->count(),
-            'from'             => $from,
-            'to'               => $to,
+            'products_tested' => $latest->count(),
+            'from'            => $from,
+            'to'              => $to,
         ];
     }
 }

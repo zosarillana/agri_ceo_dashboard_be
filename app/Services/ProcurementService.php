@@ -2,12 +2,18 @@
 
 namespace App\Services;
 
+use App\Enum\RealtimeAction;
+use App\Enum\RealtimeModule;
 use App\Models\Procurement;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ProcurementService
 {
+    public function __construct(
+        private RealtimeService $realtime
+    ) {}
+
     public function getAll(?string $from = null, ?string $to = null): Collection
     {
         return Procurement::with('product')
@@ -30,9 +36,9 @@ class ProcurementService
         ];
     }
 
-    public function store(array $data): Procurement
+    public function store(array $data, bool $silent = false): Procurement
     {
-        return Procurement::create([
+        $procurement = Procurement::create([
             'product_id'       => $data['product_id'] ?? null,
             'item_name'        => $data['item_name'],
             'supplier'         => $data['supplier'] ?? null,
@@ -41,12 +47,22 @@ class ProcurementService
             'status'           => $data['status'] ?? 'pending',
             'procurement_date' => $data['procurement_date'] ?? now()->toDateString(),
         ]);
+
+        if (! $silent) {
+            $this->realtime->emit(
+                RealtimeModule::PROCUREMENT,
+                RealtimeAction::CREATED,
+                ['id' => $procurement->id]
+            );
+        }
+
+        return $procurement;
     }
 
-    public function update(int $id, array $data): Procurement
+    public function update(int $id, array $data, bool $silent = false): Procurement
     {
         $procurement = Procurement::findOrFail($id);
-        
+
         $procurement->update([
             'product_id'       => $data['product_id'] ?? $procurement->product_id,
             'item_name'        => $data['item_name'] ?? $procurement->item_name,
@@ -56,48 +72,63 @@ class ProcurementService
             'status'           => $data['status'] ?? $procurement->status,
             'procurement_date' => $data['procurement_date'] ?? $procurement->procurement_date,
         ]);
-        
-        return $procurement->fresh();
+
+        $updated = $procurement->fresh();
+
+        if (! $silent) {
+            $this->realtime->emit(
+                RealtimeModule::PROCUREMENT,
+                RealtimeAction::UPDATED,
+                ['id' => $updated->id]
+            );
+        }
+
+        return $updated;
     }
 
     public function storeBulk(array $rows, ?string $date = null): Collection
     {
         $procurementDate = $date ?? now()->toDateString();
-        $saved = collect();
 
-        foreach ($rows as $row) {
-            // Check if this is an update (has 'id' field)
-            if (isset($row['id']) && !empty($row['id'])) {
-                // Update existing record
-                $procurement = $this->update($row['id'], [
-                    'product_id'       => $row['product_id'] ?? null,
-                    'item_name'        => $row['item_name'],
-                    'supplier'         => $row['supplier'] ?? null,
-                    'quantity'         => $row['quantity'],
-                    'unit'             => $row['unit'] ?? 'kg',
-                    'status'           => $row['status'] ?? 'pending',
-                    'procurement_date' => $procurementDate,
-                ]);
-                $saved->push($procurement);
-            } else {
-                // Create new record
-                $saved->push(Procurement::create([
-                    'product_id'       => $row['product_id'] ?? null,
-                    'item_name'        => $row['item_name'],
-                    'supplier'         => $row['supplier'] ?? null,
-                    'quantity'         => $row['quantity'],
-                    'unit'             => $row['unit'] ?? 'kg',
-                    'status'           => $row['status'] ?? 'pending',
-                    'procurement_date' => $procurementDate,
-                ]));
+        $saved = DB::transaction(function () use ($rows, $procurementDate) {
+            $result = collect();
+
+            foreach ($rows as $row) {
+                $row['procurement_date'] = $procurementDate;
+
+                if (isset($row['id']) && ! empty($row['id'])) {
+                    $result->push($this->update($row['id'], $row, silent: true));
+                } else {
+                    $result->push($this->store($row, silent: true));
+                }
             }
-        }
+
+            return $result;
+        });
+
+        $this->realtime->emit(
+            RealtimeModule::PROCUREMENT,
+            RealtimeAction::BULK_CREATED,
+            [
+                'count' => $saved->count(),
+                'ids'   => $saved->pluck('id')->values(),
+            ]
+        );
 
         return $saved;
     }
 
     public function delete(int $id): bool
     {
-        return Procurement::findOrFail($id)->delete();
+        $procurement = Procurement::findOrFail($id);
+        $deleted = $procurement->delete();
+
+        $this->realtime->emit(
+            RealtimeModule::PROCUREMENT,
+            RealtimeAction::DELETED,
+            ['id' => $id]
+        );
+
+        return $deleted;
     }
 }
