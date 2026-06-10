@@ -3,12 +3,18 @@
 
 namespace App\Services;
 
+use App\Enum\RealtimeAction;
+use App\Enum\RealtimeModule;
 use App\Models\Trade;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class TradeService
 {
+    public function __construct(
+        private RealtimeService $realtime
+    ) {}
+
     /**
      * Smart bulk save: upsert by (product_id, trade_date).
      *
@@ -21,32 +27,40 @@ class TradeService
             ? Carbon::parse($tradeDate)->toDateString()
             : Carbon::today()->toDateString();
 
-        // Prepare data
         $data = array_map(function ($row) use ($date) {
             return [
-                'product_id' => $row['product_id'],
-                'market' => $row['market'],
+                'product_id'   => $row['product_id'],
+                'market'       => $row['market'],
                 'counterparty' => $row['counterparty'] ?? null,
                 'price_per_kg' => $row['price_per_kg'],
-                'quantity_kg' => $row['quantity_kg'],
-                'trade_date' => $date,
-                'created_at' => now(),
-                'updated_at' => now(),
+                'quantity_kg'  => $row['quantity_kg'],
+                'trade_date'   => $date,
+                'created_at'   => now(),
+                'updated_at'   => now(),
             ];
         }, $rows);
 
-        // Single query upsert
         Trade::upsert(
             $data,
-            ['product_id', 'trade_date'],  // Unique constraint columns
-            ['market', 'counterparty', 'price_per_kg', 'quantity_kg']  // Columns to update
+            ['product_id', 'trade_date'],
+            ['market', 'counterparty', 'price_per_kg', 'quantity_kg']
         );
 
-        // Retrieve the affected records
-        return Trade::with('product')
+        $saved = Trade::with('product')
             ->where('trade_date', $date)
             ->whereIn('product_id', array_column($rows, 'product_id'))
             ->get();
+
+        $this->realtime->emit(
+            RealtimeModule::TRADE,
+            RealtimeAction::BULK_CREATED,
+            [
+                'count' => $saved->count(),
+                'ids'   => $saved->pluck('id')->values(),
+            ]
+        );
+
+        return $saved;
     }
 
     /**
@@ -68,16 +82,16 @@ class TradeService
         $latest = $this->getLatest($from, $to);
 
         return [
-            'total_volume' => (float) $latest->sum('quantity_kg'),
-            'total_value' => (float) $latest->sum('total_value'),
-            'avg_price' => $latest->sum('quantity_kg') > 0 
-                ? (float) ($latest->sum('total_value') / $latest->sum('quantity_kg'))
-                : 0,
-            'total_orders' => $latest->count(),
+            'total_volume'  => (float) $latest->sum('quantity_kg'),
+            'total_value'   => (float) $latest->sum('total_value'),
+            'avg_price'     => $latest->sum('quantity_kg') > 0
+                                ? (float) ($latest->sum('total_value') / $latest->sum('quantity_kg'))
+                                : 0,
+            'total_orders'  => $latest->count(),
             'export_orders' => $latest->where('market', 'Export')->count(),
-            'local_orders' => $latest->where('market', 'Local')->count(),
-            'from' => $from,
-            'to' => $to,
+            'local_orders'  => $latest->where('market', 'Local')->count(),
+            'from'          => $from,
+            'to'            => $to,
         ];
     }
 
@@ -86,8 +100,16 @@ class TradeService
      */
     public function deleteTrade(int $id): bool
     {
-        $trade = Trade::findOrFail($id);
-        return $trade->delete();
+        $trade   = Trade::findOrFail($id);
+        $deleted = $trade->delete();
+
+        $this->realtime->emit(
+            RealtimeModule::TRADE,
+            RealtimeAction::DELETED,
+            ['id' => $id]
+        );
+
+        return $deleted;
     }
 
     /**
@@ -96,14 +118,22 @@ class TradeService
     public function updateTrade(int $id, array $data): Trade
     {
         $trade = Trade::findOrFail($id);
-        
+
         $trade->update([
-            'market' => $data['market'],
+            'market'       => $data['market'],
             'counterparty' => $data['counterparty'] ?? null,
             'price_per_kg' => $data['price_per_kg'],
-            'quantity_kg' => $data['quantity_kg'],
+            'quantity_kg'  => $data['quantity_kg'],
         ]);
-        
-        return $trade->load('product');
+
+        $updated = $trade->fresh('product');
+
+        $this->realtime->emit(
+            RealtimeModule::TRADE,
+            RealtimeAction::UPDATED,
+            ['id' => $updated->id]
+        );
+
+        return $updated;
     }
 }

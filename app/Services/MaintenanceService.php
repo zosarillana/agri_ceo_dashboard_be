@@ -2,28 +2,20 @@
 
 namespace App\Services;
 
+use App\Enum\RealtimeAction;
+use App\Enum\RealtimeModule;
 use App\Models\MaintenanceUnit;
 use App\Models\Plant;
 use Illuminate\Support\Collection;
 
 class MaintenanceService
 {
+    public function __construct(
+        private RealtimeService $realtime
+    ) {}
+
     /**
      * Return all active plants with their top-level units and nested sub-units.
-     *
-     * Response shape per plant:
-     * {
-     *   id, name, code,
-     *   units: [
-     *     {
-     *       id, name, status, notes, last_checked_at, next_scheduled_at,
-     *       subunit_summary: { total, operational, maintenance, down, standby },
-     *       subunits: [
-     *         { id, name, status, notes, last_checked_at, next_scheduled_at }
-     *       ]
-     *     }
-     *   ]
-     * }
      */
     public function getAllPlantsWithUnits(): Collection
     {
@@ -58,16 +50,11 @@ class MaintenanceService
 
     /**
      * Update a unit's status and notes — works for both top-level units AND sub-units.
-     *
-     * When a sub-unit's status is updated, the parent unit's status is automatically
-     * re-derived from its children so the dashboard stays consistent:
-     *
-     *   - Any child "down"         → parent becomes "down"
-     *   - Any child "maintenance"  → parent becomes "maintenance"
-     *   - All children operational → parent becomes "operational"
-     *   - All children standby     → parent becomes "standby"
+     * 
+     * NOTE: For submitting maintenance checks, use MaintenanceLogService::submitCheck() instead.
+     * This method is primarily for manual admin updates.
      */
-    public function updateUnit(int $unitId, array $data): MaintenanceUnit
+    public function updateUnit(int $unitId, array $data, bool $skipEmit = false): MaintenanceUnit
     {
         $unit = MaintenanceUnit::with('children')->findOrFail($unitId);
 
@@ -80,7 +67,19 @@ class MaintenanceService
 
         // If this is a sub-unit, propagate the new status up to the parent.
         if ($unit->parent_id !== null) {
-            $this->propagateStatusToParent($unit->parent_id);
+            $this->propagateStatusToParent($unit->parent_id, $skipEmit);
+        }
+
+        // Only emit if not skipped
+        if (!$skipEmit) {
+            $this->realtime->emit(
+                RealtimeModule::MAINTENANCE,
+                RealtimeAction::UPDATED,
+                [
+                    'id' => $unit->id,
+                    'plant_id' => $unit->plant_id,
+                ]
+            );
         }
 
         return $unit->fresh(['plant', 'children']);
@@ -111,6 +110,15 @@ class MaintenanceService
             $this->propagateStatusToParent($unit->parent_id);
         }
 
+        $this->realtime->emit(
+            RealtimeModule::MAINTENANCE,
+            RealtimeAction::CREATED,
+            [
+                'id' => $unit->id,
+                'plant_id' => $unit->plant_id,
+            ]
+        );
+
         return $unit;
     }
 
@@ -128,18 +136,19 @@ class MaintenanceService
         if ($parentId !== null) {
             $this->propagateStatusToParent($parentId);
         }
+
+        $this->realtime->emit(
+            RealtimeModule::MAINTENANCE,
+            RealtimeAction::DELETED,
+            [
+                'id' => $unit->id,
+                'plant_id' => $unit->plant_id,
+            ]
+        );
     }
 
     /**
      * Summary counts per plant — breaks down top-level units AND sub-units separately.
-     *
-     * Returns per plant:
-     * {
-     *   plant_id, plant_name,
-     *   units:    { total, operational, maintenance, down, standby },  // top-level only
-     *   subunits: { total, operational, maintenance, down, standby },  // sub-units only
-     *   overall:  { total, operational, maintenance, down, standby },  // everything flat
-     * }
      */
     public function getStatusSummary(): Collection
     {
@@ -163,7 +172,6 @@ class MaintenanceService
 
     /**
      * Detailed sub-unit breakdown for a single top-level unit.
-     * Useful for a drill-down view (e.g. tap "Liquid Line" → see its sub-units).
      */
     public function getUnitWithSubUnitSummary(int $unitId): array
     {
@@ -198,18 +206,12 @@ class MaintenanceService
      *
      * Priority order (worst first):
      *   down > maintenance > standby > operational
-     *
-     * This means if even ONE child is "down", the parent becomes "down".
-     * If no children are down but one is "maintenance", parent becomes "maintenance".
-     * Only if all children are operational does the parent become "operational".
-     *
-     * If the parent has no active children (e.g. all deleted), its status is left unchanged.
      */
-    private function propagateStatusToParent(int $parentId): void
+    private function propagateStatusToParent(int $parentId, bool $skipEmit = false): void
     {
         $parent = MaintenanceUnit::with('children')->find($parentId);
 
-        if (! $parent) {
+        if (!$parent) {
             return;
         }
 
@@ -219,7 +221,6 @@ class MaintenanceService
             return;
         }
 
-        // Priority: down is worst, then maintenance, then standby, then operational
         $derived = match (true) {
             $children->contains('status', 'down') => 'down',
             $children->contains('status', 'maintenance') => 'maintenance',
@@ -227,11 +228,27 @@ class MaintenanceService
             default => 'operational',
         };
 
-        $parent->update(['status' => $derived]);
+        // Only update if status changed
+        if ($parent->status !== $derived) {
+            $parent->updateQuietly(['status' => $derived]);
+            
+            // Emit event for parent update (unless skipped)
+            if (!$skipEmit) {
+                $this->realtime->emit(
+                    RealtimeModule::MAINTENANCE,
+                    RealtimeAction::UPDATED,
+                    [
+                        'id' => $parent->id,
+                        'plant_id' => $parent->plant_id,
+                        'derived_from_children' => true
+                    ]
+                );
+            }
+        }
 
-        // If the parent is itself a sub-unit, continue propagating upward.
+        // Continue up the chain
         if ($parent->parent_id !== null) {
-            $this->propagateStatusToParent($parent->parent_id);
+            $this->propagateStatusToParent($parent->parent_id, $skipEmit);
         }
     }
 
@@ -256,7 +273,6 @@ class MaintenanceService
             'notes' => $unit->notes,
             'last_checked_at' => $unit->last_checked_at?->toISOString(),
             'next_scheduled_at' => $unit->next_scheduled_at?->toISOString(),
-            // Always included so the frontend knows whether to show a sub-unit indicator.
             'subunit_summary' => $this->countByStatus($unit->children),
         ];
 
@@ -276,9 +292,6 @@ class MaintenanceService
         return $formatted;
     }
 
-    /**
-     * Reusable status counter — works on any collection of units or sub-units.
-     */
     private function countByStatus(Collection $units): array
     {
         return [
