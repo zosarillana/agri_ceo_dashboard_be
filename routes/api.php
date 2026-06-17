@@ -14,6 +14,7 @@ use App\Http\Controllers\ProductionEntryController;
 use App\Http\Controllers\QcController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\TradeController;
+use App\Http\Controllers\TradeItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkforceController;
 use Illuminate\Support\Facades\Route;
@@ -153,13 +154,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('trades')->group(function () {
         Route::get('/', [TradeController::class, 'index']);
-        Route::get('/latest', [TradeController::class, 'getLatest']);
-        Route::get('/summary', [TradeController::class, 'getSummary']);
-        Route::post('/', [TradeController::class, 'store']);
+        Route::get('/summary', [TradeController::class, 'summary']);
         Route::post('/bulk', [TradeController::class, 'storeBulk']);
-        Route::get('/{id}', [TradeController::class, 'show']);
         Route::put('/{id}', [TradeController::class, 'update']);
         Route::delete('/{id}', [TradeController::class, 'destroy']);
+    });
+
+    Route::prefix('trade-items')->group(function () {
+        Route::get('/', [TradeItemController::class, 'index']);
+        Route::post('/', [TradeItemController::class, 'store']);
+        Route::get('/{id}', [TradeItemController::class, 'show']);
+        Route::put('/{id}', [TradeItemController::class, 'update']);
+        Route::delete('/{id}', [TradeItemController::class, 'destroy']);
+        Route::get('/{id}/trades', [TradeItemController::class, 'trades']);
     });
 
     Route::prefix('accounts')->group(function () {

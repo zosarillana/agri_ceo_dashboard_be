@@ -1,5 +1,4 @@
 <?php
-// app/Services/TradeService.php
 
 namespace App\Services;
 
@@ -16,10 +15,9 @@ class TradeService
     ) {}
 
     /**
-     * Smart bulk save: upsert by (product_id, trade_date).
+     * Smart bulk save: upsert by (trade_item_id, trade_date).
      *
-     * @param  array<int, array{product_id: int, market: string, counterparty: string|null, price_per_kg: float, quantity_kg: float}>  $rows
-     * @param  string|null  $tradeDate  Y-m-d, defaults to today
+     * @param  array<int, array{trade_item_id: int, market: string, counterparty: string|null, price_per_kg: float, quantity_kg: float}>  $rows
      */
     public function storeBulk(array $rows, ?string $tradeDate = null): Collection
     {
@@ -27,28 +25,26 @@ class TradeService
             ? Carbon::parse($tradeDate)->toDateString()
             : Carbon::today()->toDateString();
 
-        $data = array_map(function ($row) use ($date) {
-            return [
-                'product_id'   => $row['product_id'],
-                'market'       => $row['market'],
-                'counterparty' => $row['counterparty'] ?? null,
-                'price_per_kg' => $row['price_per_kg'],
-                'quantity_kg'  => $row['quantity_kg'],
-                'trade_date'   => $date,
-                'created_at'   => now(),
-                'updated_at'   => now(),
-            ];
-        }, $rows);
+        $data = array_map(fn ($row) => [
+            'trade_item_id' => $row['trade_item_id'],
+            'market'        => $row['market'],
+            'counterparty'  => $row['counterparty'] ?? null,
+            'price_per_kg'  => $row['price_per_kg'],
+            'quantity_kg'   => $row['quantity_kg'],
+            'trade_date'    => $date,
+            'created_at'    => now(),
+            'updated_at'    => now(),
+        ], $rows);
 
         Trade::upsert(
             $data,
-            ['product_id', 'trade_date'],
-            ['market', 'counterparty', 'price_per_kg', 'quantity_kg']
+            ['trade_item_id', 'trade_date'],
+            ['market', 'counterparty', 'price_per_kg', 'quantity_kg', 'updated_at']
         );
 
-        $saved = Trade::with('product')
+        $saved = Trade::with('tradeItem')
             ->where('trade_date', $date)
-            ->whereIn('product_id', array_column($rows, 'product_id'))
+            ->whereIn('trade_item_id', array_column($rows, 'trade_item_id'))
             ->get();
 
         $this->realtime->emit(
@@ -64,13 +60,13 @@ class TradeService
     }
 
     /**
-     * Latest trade per product, optionally filtered to a date range.
+     * Latest trade per trade item, optionally filtered to a date range.
      */
     public function getLatest(?string $from = null, ?string $to = null): Collection
     {
-        return Trade::with('product')
-            ->latestPerProduct($from, $to)
-            ->orderBy('product_id')
+        return Trade::with('tradeItem')
+            ->latestPerTradeItem($from, $to)   // ← fixed: no 'scope' prefix
+            ->orderBy('trade_item_id')
             ->get();
     }
 
@@ -126,7 +122,7 @@ class TradeService
             'quantity_kg'  => $data['quantity_kg'],
         ]);
 
-        $updated = $trade->fresh('product');
+        $updated = $trade->fresh('tradeItem');
 
         $this->realtime->emit(
             RealtimeModule::TRADE,

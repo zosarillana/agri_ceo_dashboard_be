@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\EnergyRecord;
 use App\Models\MaintenanceLog;
 use App\Models\MaintenanceUnit;
@@ -14,9 +15,13 @@ use Carbon\Carbon;
 class DashboardService
 {
     protected EnergyService $energyService;
+
     protected QcService $qcService;
+
     protected ProcurementService $procurementService;
+
     protected TradeService $tradeService;
+
     protected AccountService $accountService;
 
     public function __construct(
@@ -589,6 +594,8 @@ class DashboardService
         return array_merge($summary, [
             'has_data' => $hasData,
             'month' => $targetDate->format('Y-m'),
+            'last_updated_at' => Account::latest('updated_at')  // add this
+                ->value('updated_at')?->toISOString(),
         ]);
     }
 }
