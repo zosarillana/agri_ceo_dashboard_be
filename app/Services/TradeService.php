@@ -16,8 +16,6 @@ class TradeService
 
     /**
      * Smart bulk save: upsert by (trade_item_id, trade_date).
-     *
-     * @param  array<int, array{trade_item_id: int, market: string, counterparty: string|null, price_per_kg: float, quantity_kg: float}>  $rows
      */
     public function storeBulk(array $rows, ?string $tradeDate = null): Collection
     {
@@ -60,40 +58,72 @@ class TradeService
     }
 
     /**
-     * Latest trade per trade item, optionally filtered to a date range.
+     * Get trades in a date range (RAW DATA, not "latest per item").
+     * This is what you want for MONTH-TO-DATE totals.
      */
-    public function getLatest(?string $from = null, ?string $to = null): Collection
+    public function getBetween(?string $from = null, ?string $to = null): Collection
     {
-        return Trade::with('tradeItem')
-            ->latestPerTradeItem($from, $to)   // ← fixed: no 'scope' prefix
-            ->orderBy('trade_item_id')
-            ->get();
+        $query = Trade::with('tradeItem');
+
+        if ($from) {
+            $query->whereDate('trade_date', '>=', $from);
+        }
+
+        if ($to) {
+            $query->whereDate('trade_date', '<=', $to);
+        }
+
+        return $query->orderBy('trade_date')->get();
     }
 
     /**
-     * Summary totals for the matching trades.
+     * Month-to-date helper (THIS is what you asked for).
+     */
+    public function getMonthToDate(): Collection
+    {
+        $from = Carbon::now()->startOfMonth()->toDateString();
+        $to   = Carbon::today()->toDateString();
+
+        return $this->getBetween($from, $to);
+    }
+
+    /**
+     * Summary totals for a range (INCLUDING MONTH-TO-DATE).
      */
     public function getSummary(?string $from = null, ?string $to = null): array
     {
-        $latest = $this->getLatest($from, $to);
+        $trades = $this->getBetween($from, $to);
+
+        $totalVolume = $trades->sum('quantity_kg');
+        $totalValue  = $trades->sum('total_value');
 
         return [
-            'total_volume'  => (float) $latest->sum('quantity_kg'),
-            'total_value'   => (float) $latest->sum('total_value'),
-            'avg_price'     => $latest->sum('quantity_kg') > 0
-                                ? (float) ($latest->sum('total_value') / $latest->sum('quantity_kg'))
-                                : 0,
-            'total_orders'  => $latest->count(),
-            'export_orders' => $latest->where('market', 'Export')->count(),
-            'local_orders'  => $latest->where('market', 'Local')->count(),
+            'total_volume'  => (float) $totalVolume,
+            'total_value'   => (float) $totalValue,
+            'avg_price'     => $totalVolume > 0
+                ? (float) ($totalValue / $totalVolume)
+                : 0,
+
+            'total_orders'  => $trades->count(),
+            'export_orders' => $trades->where('market', 'Export')->count(),
+            'local_orders'  => $trades->where('market', 'Local')->count(),
+
             'from'          => $from,
             'to'            => $to,
         ];
     }
 
     /**
-     * Delete a trade by ID.
+     * Quick Month-to-Date summary (what you likely want in dashboard).
      */
+    public function getMonthToDateSummary(): array
+    {
+        return $this->getSummary(
+            Carbon::now()->startOfMonth()->toDateString(),
+            Carbon::today()->toDateString()
+        );
+    }
+
     public function deleteTrade(int $id): bool
     {
         $trade   = Trade::findOrFail($id);
@@ -108,9 +138,6 @@ class TradeService
         return $deleted;
     }
 
-    /**
-     * Update a single trade.
-     */
     public function updateTrade(int $id, array $data): Trade
     {
         $trade = Trade::findOrFail($id);

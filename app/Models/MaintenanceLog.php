@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MaintenanceLog extends Model
 {
+    use Auditable;
     protected $fillable = [
         'maintenance_unit_id',
         'checked_by',

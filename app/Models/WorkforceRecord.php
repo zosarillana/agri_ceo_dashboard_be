@@ -4,11 +4,13 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class WorkforceRecord extends Model
 {
+    use Auditable;
     protected $fillable = [
         'department_key',
         'department_label',

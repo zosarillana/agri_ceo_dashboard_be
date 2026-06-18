@@ -9,6 +9,7 @@ use App\Models\MaintenanceUnit;
 use App\Models\ProductionEntry;
 use App\Models\QcRecord;
 use App\Models\Sale;
+use App\Models\Trade;
 use App\Models\WorkforceRecord;
 use Carbon\Carbon;
 
@@ -48,7 +49,7 @@ class DashboardService
             'workforce' => $this->getWorkforceStats($date),
             'qc' => $this->getQcStats($date),
             'procurement' => $this->getProcurementStats($date),
-            'trades' => $this->getTradeStats($date),
+            'trading' => $this->getTradeStats($date),
             'accounts' => $this->getAccountStats($date),
         ];
     }
@@ -576,6 +577,8 @@ class DashboardService
         return array_merge($summary, [
             'has_data' => $summary['total_orders'] > 0,
             'month' => $targetDate->format('Y-m'),
+            'last_updated_at' => Trade::latest('updated_at')
+                ->value('updated_at')?->toISOString(),
         ]);
     }
 
