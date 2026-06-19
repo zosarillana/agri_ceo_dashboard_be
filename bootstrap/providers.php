@@ -1,7 +1,6 @@
 <?php
 
-use App\Providers\AppServiceProvider;
-
 return [
-    AppServiceProvider::class,
+    App\Providers\ActivityLogServiceProvider::class,
+    App\Providers\AppServiceProvider::class,
 ];

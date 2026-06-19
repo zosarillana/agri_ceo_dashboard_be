@@ -17,6 +17,7 @@ use App\Http\Controllers\TradeController;
 use App\Http\Controllers\TradeItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkforceController;
+use App\Http\Controllers\ActivityLogController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -152,13 +153,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/summary', [QcController::class, 'getSummary']);
     });
 
-    Route::prefix('trades')->group(function () {
-        Route::get('/', [TradeController::class, 'index']);
-        Route::get('/summary', [TradeController::class, 'summary']);
-        Route::post('/bulk', [TradeController::class, 'storeBulk']);
-        Route::put('/{id}', [TradeController::class, 'update']);
-        Route::delete('/{id}', [TradeController::class, 'destroy']);
-    });
+        Route::prefix('trades')->group(function () {
+            Route::get('/', [TradeController::class, 'index']);
+            Route::get('/summary', [TradeController::class, 'summary']);
+            Route::post('/bulk', [TradeController::class, 'storeBulk']);
+            Route::put('/{id}', [TradeController::class, 'update']);
+            Route::delete('/{id}', [TradeController::class, 'destroy']);
+        });
 
     Route::prefix('trade-items')->group(function () {
         Route::get('/', [TradeItemController::class, 'index']);
@@ -188,4 +189,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/bulk', [ProcurementController::class, 'storeBulk']);
         Route::delete('/{id}', [ProcurementController::class, 'destroy']);
     });
+
+    Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 });

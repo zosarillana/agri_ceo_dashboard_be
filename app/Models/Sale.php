@@ -1,13 +1,17 @@
 <?php
+
 // app/Models/Sale.php
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Sale extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'product_id',
         'market',
@@ -17,10 +21,10 @@ class Sale extends Model
     ];
 
     protected $casts = [
-        'asp_per_kg'      => 'decimal:4',
-        'quantity_kg'     => 'decimal:4',
+        'asp_per_kg' => 'decimal:4',
+        'quantity_kg' => 'decimal:4',
         'total_sales_usd' => 'decimal:4',
-        'sale_date'       => 'date',
+        'sale_date' => 'date',
     ];
 
     public function product(): BelongsTo
@@ -39,13 +43,13 @@ class Sale extends Model
     public function scopeLatestPerProduct(
         $query,
         ?string $from = null,
-        ?string $to   = null
+        ?string $to = null
     ) {
         // Step 1: find the latest sale_date per product within the range
         $latestDateSub = \DB::table('sales')
             ->selectRaw('product_id, MAX(sale_date) as max_date')
             ->when($from, fn ($q) => $q->whereDate('sale_date', '>=', $from))
-            ->when($to,   fn ($q) => $q->whereDate('sale_date', '<=', $to))
+            ->when($to, fn ($q) => $q->whereDate('sale_date', '<=', $to))
             ->groupBy('product_id');
 
         // Step 2: among rows that share the same (product_id, max_date),
@@ -54,7 +58,7 @@ class Sale extends Model
             ->selectRaw('MAX(s.id) as max_id')
             ->joinSub($latestDateSub, 'ld', function ($join) {
                 $join->on('s.product_id', '=', 'ld.product_id')
-                     ->on(\DB::raw('DATE(s.sale_date)'), '=', \DB::raw('DATE(ld.max_date)'));
+                    ->on(\DB::raw('DATE(s.sale_date)'), '=', \DB::raw('DATE(ld.max_date)'));
             })
             ->groupBy('s.product_id');
 

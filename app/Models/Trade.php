@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Traits\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 
 class Trade extends Model
 {
+    use Auditable;
     protected $fillable = [
         'trade_item_id',
         'market',

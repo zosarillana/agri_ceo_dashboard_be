@@ -14,10 +14,11 @@ class TradeController extends Controller
 
     /**
      * GET /api/trades?from=Y-m-d&to=Y-m-d
+     * Returns ALL trades in range (not "latest per item")
      */
     public function index(Request $request): JsonResponse
     {
-        $trades = $this->tradeService->getLatest(
+        $trades = $this->tradeService->getBetween(
             $request->query('from'),
             $request->query('to')
         );
@@ -27,6 +28,7 @@ class TradeController extends Controller
 
     /**
      * GET /api/trades/summary?from=Y-m-d&to=Y-m-d
+     * Returns aggregated totals
      */
     public function summary(Request $request): JsonResponse
     {
@@ -34,6 +36,17 @@ class TradeController extends Controller
             $request->query('from'),
             $request->query('to')
         );
+
+        return response()->json($summary);
+    }
+
+    /**
+     * OPTIONAL shortcut endpoint:
+     * GET /api/trades/month-to-date
+     */
+    public function monthToDateSummary(): JsonResponse
+    {
+        $summary = $this->tradeService->getMonthToDateSummary();
 
         return response()->json($summary);
     }
