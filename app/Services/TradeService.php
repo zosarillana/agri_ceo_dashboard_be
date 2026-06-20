@@ -27,8 +27,8 @@ class TradeService
             'trade_item_id' => $row['trade_item_id'],
             'market'        => $row['market'],
             'counterparty'  => $row['counterparty'] ?? null,
-            'price_per_kg'  => $row['price_per_kg'],
-            'quantity_kg'   => $row['quantity_kg'],
+            'input_kg'      => $row['input_kg'],
+            'output_kg'     => $row['output_kg'],
             'trade_date'    => $date,
             'created_at'    => now(),
             'updated_at'    => now(),
@@ -37,7 +37,7 @@ class TradeService
         Trade::upsert(
             $data,
             ['trade_item_id', 'trade_date'],
-            ['market', 'counterparty', 'price_per_kg', 'quantity_kg', 'updated_at']
+            ['market', 'counterparty', 'input_kg', 'output_kg', 'updated_at']
         );
 
         $saved = Trade::with('tradeItem')
@@ -94,7 +94,7 @@ class TradeService
     {
         $trades = $this->getBetween($from, $to);
 
-        $totalVolume = $trades->sum('quantity_kg');
+        $totalVolume = $trades->sum('output_kg'); // Changed from quantity_kg to output_kg
         $totalValue  = $trades->sum('total_value');
 
         return [
@@ -145,8 +145,8 @@ class TradeService
         $trade->update([
             'market'       => $data['market'],
             'counterparty' => $data['counterparty'] ?? null,
-            'price_per_kg' => $data['price_per_kg'],
-            'quantity_kg'  => $data['quantity_kg'],
+            'input_kg'     => $data['input_kg'],
+            'output_kg'    => $data['output_kg'],
         ]);
 
         $updated = $trade->fresh('tradeItem');

@@ -62,8 +62,8 @@ class TradeController extends Controller
             'rows.*.trade_item_id'    => ['required', 'integer', 'exists:trade_items,id'],
             'rows.*.market'           => ['required', 'in:Export,Local'],
             'rows.*.counterparty'     => ['nullable', 'string', 'max:255'],
-            'rows.*.price_per_kg'     => ['required', 'numeric', 'min:0'],
-            'rows.*.quantity_kg'      => ['required', 'numeric', 'min:0'],
+            'rows.*.input_kg'         => ['required', 'numeric', 'min:0'],
+            'rows.*.output_kg'        => ['required', 'numeric', 'min:0'],
         ]);
 
         $saved = $this->tradeService->storeBulk(
@@ -82,8 +82,8 @@ class TradeController extends Controller
         $validated = $request->validate([
             'market'       => ['required', 'in:Export,Local'],
             'counterparty' => ['nullable', 'string', 'max:255'],
-            'price_per_kg' => ['required', 'numeric', 'min:0'],
-            'quantity_kg'  => ['required', 'numeric', 'min:0'],
+            'input_kg'     => ['required', 'numeric', 'min:0'],
+            'output_kg'    => ['required', 'numeric', 'min:0'],
         ]);
 
         $trade = $this->tradeService->updateTrade($id, $validated);
