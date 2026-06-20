@@ -14,16 +14,16 @@ class Trade extends Model
         'trade_item_id',
         'market',
         'counterparty',
-        'price_per_kg',
-        'quantity_kg',
+        'input_kg',
+        'output_kg',
         'trade_date',
     ];
 
     protected $casts = [
-        'price_per_kg' => 'decimal:4',
-        'quantity_kg'  => 'decimal:4',
-        'total_value'  => 'decimal:4',
-        'trade_date'   => 'date',
+        'input_kg'    => 'decimal:4',
+        'output_kg'   => 'decimal:4',
+        'total_value' => 'decimal:4',
+        'trade_date'  => 'date',
     ];
 
     public function tradeItem(): BelongsTo
