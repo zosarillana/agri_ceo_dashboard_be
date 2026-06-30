@@ -15,13 +15,16 @@ class Sale extends Model
     protected $fillable = [
         'product_id',
         'market',
+        'sales',
         'asp_per_kg',
         'quantity_kg',
         'sale_date',
     ];
 
     protected $casts = [
+        'sales' => 'decimal:4',
         'asp_per_kg' => 'decimal:4',
+        'asp_total_usd' => 'decimal:4',
         'quantity_kg' => 'decimal:4',
         'total_sales_usd' => 'decimal:4',
         'sale_date' => 'date',
