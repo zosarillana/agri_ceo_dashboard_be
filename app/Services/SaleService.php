@@ -17,6 +17,7 @@ class SaleService
 
     /**
      * Smart bulk save: upsert by (product_id, sale_date).
+     * If rows have 'id', update existing records; otherwise create new ones.
      */
     public function storeBulk(array $rows, ?string $saleDate = null): Collection
     {
@@ -24,39 +25,154 @@ class SaleService
             ? Carbon::parse($saleDate)->toDateString()
             : Carbon::today()->toDateString();
 
-        $data = array_map(function ($row) use ($date) {
-            return [
+        $updatedIds = [];
+        $createdIds = [];
+
+        foreach ($rows as $row) {
+            $data = [
                 'product_id' => $row['product_id'],
                 'market' => $row['market'],
                 'sales' => $row['sales'],
                 'asp_per_kg' => $row['asp_per_kg'] ?? null,
                 'quantity_kg' => $row['quantity_kg'],
                 'sale_date' => $date,
-                'created_at' => now(),
                 'updated_at' => now(),
             ];
-        }, $rows);
 
-        Sale::upsert(
-            $data,
-            ['product_id', 'sale_date'],
-            ['market', 'sales', 'asp_per_kg', 'quantity_kg']
-        );
+            // Check if this is an update (has id) or a new record
+            if (isset($row['id']) && !empty($row['id'])) {
+                // Find and update existing record
+                $sale = Sale::find($row['id']);
+                if ($sale) {
+                    $sale->update($data);
+                    $updatedIds[] = $sale->id;
+                    
+                    // Emit update event
+                    $this->realtime->emit(
+                        RealtimeModule::SALE,
+                        RealtimeAction::UPDATED,
+                        ['id' => $sale->id]
+                    );
+                    continue;
+                }
+            }
 
-        $saved = Sale::where('sale_date', $date)
-            ->whereIn('product_id', array_column($rows, 'product_id'))
-            ->get();
+            // Create new record
+            $data['created_at'] = now();
+            $sale = Sale::create($data);
+            $createdIds[] = $sale->id;
+            
+            // Emit create event
+            $this->realtime->emit(
+                RealtimeModule::SALE,
+                RealtimeAction::CREATED,
+                ['id' => $sale->id]
+            );
+        }
+
+        // Get all affected records
+        $allIds = array_merge($updatedIds, $createdIds);
+        $saved = Sale::whereIn('id', $allIds)->with('product')->get();
 
         $this->realtime->emit(
             RealtimeModule::SALE,
             RealtimeAction::BULK_CREATED,
             [
-                'count' => $saved->count(),
-                'ids' => $saved->pluck('id')->values(),
+                'created' => $createdIds,
+                'updated' => $updatedIds,
+                'total' => count($allIds),
             ]
         );
 
         return $saved;
+    }
+
+    /**
+     * Alternative: Update or create using unique constraint
+     * This uses the database's unique constraint on (product_id, sale_date)
+     */
+    public function storeBulkWithUpsert(array $rows, ?string $saleDate = null): Collection
+    {
+        $date = $saleDate
+            ? Carbon::parse($saleDate)->toDateString()
+            : Carbon::today()->toDateString();
+
+        $updatedIds = [];
+        $createdIds = [];
+
+        foreach ($rows as $row) {
+            $data = [
+                'market' => $row['market'],
+                'sales' => $row['sales'],
+                'asp_per_kg' => $row['asp_per_kg'] ?? null,
+                'quantity_kg' => $row['quantity_kg'],
+                'updated_at' => now(),
+            ];
+
+            // Find existing record by product_id and sale_date
+            $sale = Sale::where('product_id', $row['product_id'])
+                ->whereDate('sale_date', $date)
+                ->first();
+
+            if ($sale) {
+                // Update existing
+                $sale->update($data);
+                $updatedIds[] = $sale->id;
+            } else {
+                // Create new
+                $data['product_id'] = $row['product_id'];
+                $data['sale_date'] = $date;
+                $data['created_at'] = now();
+                $sale = Sale::create($data);
+                $createdIds[] = $sale->id;
+            }
+        }
+
+        // Get all affected records
+        $allIds = array_merge($updatedIds, $createdIds);
+        $saved = Sale::whereIn('id', $allIds)->with('product')->get();
+
+        $this->realtime->emit(
+            RealtimeModule::SALE,
+            RealtimeAction::BULK_CREATED,
+            [
+                'created' => $createdIds,
+                'updated' => $updatedIds,
+                'total' => count($allIds),
+            ]
+        );
+
+        return $saved;
+    }
+
+    /**
+     * Update a single sale record
+     */
+    public function updateSale(int $id, array $data): ?Sale
+    {
+        $sale = Sale::find($id);
+        
+        if (!$sale) {
+            return null;
+        }
+
+        $sale->update([
+            'product_id' => $data['product_id'],
+            'market' => $data['market'],
+            'sales' => $data['sales'],
+            'asp_per_kg' => $data['asp_per_kg'] ?? null,
+            'quantity_kg' => $data['quantity_kg'],
+            'sale_date' => $data['sale_date'] ?? $sale->sale_date,
+            'updated_at' => now(),
+        ]);
+
+        $this->realtime->emit(
+            RealtimeModule::SALE,
+            RealtimeAction::UPDATED,
+            ['id' => $sale->id]
+        );
+
+        return $sale->fresh();
     }
 
     /**
@@ -109,8 +225,6 @@ class SaleService
     /**
      * Summary totals for the matching sales.
      * Defaults to current month if no dates provided.
-     *
-     * UPDATED: asp_total_usd is now just the SUM of asp_total_usd (no division)
      */
     public function getSummary(?string $from = null, ?string $to = null): array
     {
@@ -132,7 +246,6 @@ class SaleService
             DB::raw('COALESCE(SUM(quantity_kg), 0) as total_quantity_kg'),
             DB::raw('COALESCE(SUM(total_sales_usd), 0) as total_sales_usd'),
             DB::raw('COALESCE(SUM(sales), 0) as total_sales_raw'),
-            // Just sum asp_total_usd directly (no division)
             DB::raw('ROUND(COALESCE(SUM(asp_total_usd), 0), 2) as asp_total_usd'),
             DB::raw('COALESCE(SUM(CASE WHEN market = "Export" THEN 1 ELSE 0 END), 0) as export_count'),
             DB::raw('COALESCE(SUM(CASE WHEN market = "Local" THEN 1 ELSE 0 END), 0) as local_count'),
@@ -145,7 +258,6 @@ class SaleService
                 DB::raw('SUM(quantity_kg) as total_quantity_kg'),
                 DB::raw('SUM(total_sales_usd) as total_sales_usd'),
                 DB::raw('SUM(sales) as total_sales_raw'),
-                // Just sum asp_total_usd directly (no division)
                 DB::raw('ROUND(SUM(asp_total_usd), 2) as asp_total_usd'),
             ])
             ->when($from, fn ($q) => $q->where('sale_date', '>=', $from))
@@ -168,8 +280,29 @@ class SaleService
     }
 
     /**
+     * Delete a sale entry by ID
+     */
+    public function deleteById(int $id): bool
+    {
+        $sale = Sale::find($id);
+        
+        if (!$sale) {
+            return false;
+        }
+
+        $sale->delete();
+
+        $this->realtime->emit(
+            RealtimeModule::SALE,
+            RealtimeAction::DELETED,
+            ['id' => $id]
+        );
+
+        return true;
+    }
+
+    /**
      * Delete a sale entry by product_id and sale_date.
-     * Returns true if a record was found and deleted, false if not found.
      */
     public function deleteBySaleDate(int $productId, string $saleDate): bool
     {
