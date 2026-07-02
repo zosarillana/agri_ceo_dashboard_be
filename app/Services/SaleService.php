@@ -40,19 +40,20 @@ class SaleService
             ];
 
             // Check if this is an update (has id) or a new record
-            if (isset($row['id']) && !empty($row['id'])) {
+            if (isset($row['id']) && ! empty($row['id'])) {
                 // Find and update existing record
                 $sale = Sale::find($row['id']);
                 if ($sale) {
                     $sale->update($data);
                     $updatedIds[] = $sale->id;
-                    
+
                     // Emit update event
                     $this->realtime->emit(
                         RealtimeModule::SALE,
                         RealtimeAction::UPDATED,
                         ['id' => $sale->id]
                     );
+
                     continue;
                 }
             }
@@ -61,7 +62,7 @@ class SaleService
             $data['created_at'] = now();
             $sale = Sale::create($data);
             $createdIds[] = $sale->id;
-            
+
             // Emit create event
             $this->realtime->emit(
                 RealtimeModule::SALE,
@@ -151,8 +152,8 @@ class SaleService
     public function updateSale(int $id, array $data): ?Sale
     {
         $sale = Sale::find($id);
-        
-        if (!$sale) {
+
+        if (! $sale) {
             return null;
         }
 
@@ -210,6 +211,7 @@ class SaleService
 
         if (empty($availableDates)) {
             \Log::warning('No data found in date range', ['from' => $from, 'to' => $to]);
+
             return collect();
         }
 
@@ -222,6 +224,18 @@ class SaleService
             ->get();
     }
 
+    /**
+     * Summary totals for the matching sales.
+     * Defaults to current month if no dates provided.
+     */
+    /**
+     * Summary totals for the matching sales.
+     * Defaults to current month if no dates provided.
+     */
+    /**
+     * Summary totals for the matching sales.
+     * Defaults to current month if no dates provided.
+     */
     /**
      * Summary totals for the matching sales.
      * Defaults to current month if no dates provided.
@@ -246,7 +260,8 @@ class SaleService
             DB::raw('COALESCE(SUM(quantity_kg), 0) as total_quantity_kg'),
             DB::raw('COALESCE(SUM(total_sales_usd), 0) as total_sales_usd'),
             DB::raw('COALESCE(SUM(sales), 0) as total_sales_raw'),
-            DB::raw('ROUND(COALESCE(SUM(asp_total_usd), 0), 2) as asp_total_usd'),
+            // Calculate overall ASP as total_sales_usd / total_quantity_kg
+            DB::raw('ROUND(COALESCE(SUM(total_sales_usd) / NULLIF(SUM(quantity_kg), 0), 0), 2) as asp_total_usd'),
             DB::raw('COALESCE(SUM(CASE WHEN market = "Export" THEN 1 ELSE 0 END), 0) as export_count'),
             DB::raw('COALESCE(SUM(CASE WHEN market = "Local" THEN 1 ELSE 0 END), 0) as local_count'),
         ])->first();
@@ -258,7 +273,7 @@ class SaleService
                 DB::raw('SUM(quantity_kg) as total_quantity_kg'),
                 DB::raw('SUM(total_sales_usd) as total_sales_usd'),
                 DB::raw('SUM(sales) as total_sales_raw'),
-                DB::raw('ROUND(SUM(asp_total_usd), 2) as asp_total_usd'),
+                DB::raw('ROUND(SUM(total_sales_usd) / NULLIF(SUM(quantity_kg), 0), 2) as asp_total_usd'),
             ])
             ->when($from, fn ($q) => $q->where('sale_date', '>=', $from))
             ->when($to, fn ($q) => $q->where('sale_date', '<=', $to))
@@ -270,7 +285,7 @@ class SaleService
             'total_sales_usd' => (float) $totals->total_sales_usd,
             'total_sales_raw' => (float) $totals->total_sales_raw,
             'total_quantity_kg' => (float) $totals->total_quantity_kg,
-            'asp_total_usd' => (float) $totals->asp_total_usd,
+            'asp_total_usd' => (float) $totals->asp_total_usd, // Now will be 370/222.3 = 1.66
             'export_count' => (int) $totals->export_count,
             'local_count' => (int) $totals->local_count,
             'detailed_summary' => $detailedSummary,
@@ -285,8 +300,8 @@ class SaleService
     public function deleteById(int $id): bool
     {
         $sale = Sale::find($id);
-        
-        if (!$sale) {
+
+        if (! $sale) {
             return false;
         }
 
