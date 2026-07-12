@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\DashboardController;
@@ -17,7 +18,9 @@ use App\Http\Controllers\TradeController;
 use App\Http\Controllers\TradeItemController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WorkforceController;
-use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\Api\ImportRowController;
+use App\Http\Controllers\Api\ImportTemplateController;
+use App\Http\Controllers\Api\SpreadsheetImportController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -153,13 +156,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/summary', [QcController::class, 'getSummary']);
     });
 
-        Route::prefix('trades')->group(function () {
-            Route::get('/', [TradeController::class, 'index']);
-            Route::get('/summary', [TradeController::class, 'summary']);
-            Route::post('/bulk', [TradeController::class, 'storeBulk']);
-            Route::put('/{id}', [TradeController::class, 'update']);
-            Route::delete('/{id}', [TradeController::class, 'destroy']);
-        });
+    Route::prefix('trades')->group(function () {
+        Route::get('/', [TradeController::class, 'index']);
+        Route::get('/summary', [TradeController::class, 'summary']);
+        Route::post('/bulk', [TradeController::class, 'storeBulk']);
+        Route::put('/{id}', [TradeController::class, 'update']);
+        Route::delete('/{id}', [TradeController::class, 'destroy']);
+    });
 
     Route::prefix('trade-items')->group(function () {
         Route::get('/', [TradeItemController::class, 'index']);
@@ -190,5 +193,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [ProcurementController::class, 'destroy']);
     });
 
+    Route::prefix('imports')->group(function () {
+        Route::get('/', [ImportRowController::class, 'index']);
+        Route::get('/{id}', [ImportRowController::class, 'show']);
+        Route::get('/summary', [ImportRowController::class, 'summary']);
+        Route::post('/', [SpreadsheetImportController::class, 'store']);
+        Route::post('/auto', [SpreadsheetImportController::class, 'auto']);
+    });
+
+    // Templates routes
+    Route::prefix('import-templates')->group(function () {
+        Route::get('/', [ImportTemplateController::class, 'index']); // This was missing!
+        Route::post('/', [ImportTemplateController::class, 'store']);
+        Route::post('/detect', [ImportTemplateController::class, 'detect']);
+    });
+
+    // Also add a direct route for templates (alternative)
+    Route::get('/imports/templates', [ImportTemplateController::class, 'index']);
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
 });
