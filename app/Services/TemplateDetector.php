@@ -10,27 +10,45 @@ class TemplateDetector
     public function detect(string $filePath): ?array
     {
         $spreadsheet = IOFactory::load($filePath);
-        $sheetNames = $spreadsheet->getSheetNames();
 
-        foreach ($sheetNames as $sheetName) {
+        foreach ($spreadsheet->getSheetNames() as $sheetName) {
             $sheet = $spreadsheet->getSheetByName($sheetName);
+
+            if (! $sheet) {
+                continue;
+            }
+
             $highestColumn = $sheet->getHighestColumn();
-            $headerRow = 1; // Default to first row, but you might want to detect this
-            
-            // Get headers from the first row
-            $headers = $sheet->rangeToArray('A1:' . $highestColumn . '1', NULL, TRUE, FALSE)[0];
-            $headers = array_filter(array_map('trim', $headers));
-            
-            // Try to find a matching template
-            $template = ImportTemplate::findMatch($headers);
-            
-            if ($template) {
-                return [
-                    'template' => $template,
-                    'sheet' => $sheetName,
-                    'headerRow' => $headerRow,
-                    'headers' => $headers,
-                ];
+
+            // Scan the first 30 rows looking for a matching header
+            for ($headerRow = 1; $headerRow <= 30; $headerRow++) {
+
+                $headers = $sheet->rangeToArray(
+                    "A{$headerRow}:{$highestColumn}{$headerRow}",
+                    null,
+                    true,
+                    false
+                )[0];
+
+                $headers = array_values(array_filter(
+                    array_map(fn ($v) => trim((string) $v), $headers),
+                    fn ($v) => $v !== ''
+                ));
+
+                if (empty($headers)) {
+                    continue;
+                }
+
+                $template = ImportTemplate::findMatch($headers);
+
+                if ($template) {
+                    return [
+                        'template'  => $template,
+                        'sheet'     => $sheetName,
+                        'headerRow' => $headerRow,
+                        'headers'   => $headers,
+                    ];
+                }
             }
         }
 
@@ -40,6 +58,7 @@ class TemplateDetector
     public function sheetNames(string $filePath): array
     {
         $spreadsheet = IOFactory::load($filePath);
+
         return $spreadsheet->getSheetNames();
     }
 }
