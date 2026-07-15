@@ -3,7 +3,10 @@
 namespace App\Imports;
 
 use App\Models\ImportTemplate;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Events\BeforeImport;
 
 /**
  * Parses a spreadsheet server-side using a saved ImportTemplate: which row
@@ -27,7 +30,7 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
  *   'imports' => ['heading_row' => ['formatter' => null]]
  * (see the README for why).
  */
-class TemplateImport implements WithMultipleSheets
+class TemplateImport implements WithChunkReading, WithEvents, WithMultipleSheets
 {
     public ?SingleSheetTemplateImport $sheetImport = null;
 
@@ -38,11 +41,35 @@ class TemplateImport implements WithMultipleSheets
         protected ?int $headerRowOverride = null,
         protected ?array $selectedRowIndices = null,
         protected ?string $productionDate = null,
-    ) {
+    ) {}
+
+    /**
+     * Process rows in chunks of 500 to manage memory
+     */
+    public function chunkSize(): int
+    {
+        return 500;
+    }
+
+    /**
+     * Register event listeners to free memory
+     */
+    public function registerEvents(): array
+    {
+        return [
+            BeforeImport::class => function (BeforeImport $event) {
+                // Force garbage collection before import
+                gc_collect_cycles();
+            },
+        ];
     }
 
     public function sheets(): array
     {
+        \Log::info('Creating SingleSheetTemplateImport', [
+            'sheet' => $this->sheetName,
+        ]);
+
         $this->sheetImport = new SingleSheetTemplateImport(
             $this->template,
             $this->sheetName,
@@ -52,7 +79,9 @@ class TemplateImport implements WithMultipleSheets
             $this->productionDate,
         );
 
-        return [$this->sheetName => $this->sheetImport];
+        return [
+            $this->sheetName => $this->sheetImport,
+        ];
     }
 
     public function importedCount(): int

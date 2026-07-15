@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "58025ad72d47919e825561900b779d04",
+    "content-hash": "fafa56c27beee23f4b9438b102791e69",
     "packages": [
         {
             "name": "brick/math",
@@ -3335,6 +3335,59 @@
             "time": "2026-02-16T23:10:27+00:00"
         },
         {
+            "name": "nuovo/spreadsheet-reader",
+            "version": "0.5.11",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/nuovo/spreadsheet-reader.git",
+                "reference": "f6bd49d101042eaa71b0fbd82e7a57e5a276dc3d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/nuovo/spreadsheet-reader/zipball/f6bd49d101042eaa71b0fbd82e7a57e5a276dc3d",
+                "reference": "f6bd49d101042eaa71b0fbd82e7a57e5a276dc3d",
+                "shasum": ""
+            },
+            "require": {
+                "ext-zip": "*",
+                "php": ">= 5.3.0"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "./"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Martins Pilsetnieks",
+                    "email": "pilsetnieks@gmail.com",
+                    "homepage": "http://www.nuovo.lv/"
+                }
+            ],
+            "description": "Spreadsheet reader library for Excel, OpenOffice and structured text files",
+            "homepage": "https://github.com/nuovo/spreadsheet-reader",
+            "keywords": [
+                "OpenOffice",
+                "csv",
+                "excel",
+                "ods",
+                "spreadsheet",
+                "xls",
+                "xlsx"
+            ],
+            "support": {
+                "email": "spreadsheet-reader@nuovo.lv",
+                "issues": "https://github.com/nuovo/spreadsheet-reader/issues",
+                "source": "https://github.com/nuovo/spreadsheet-reader/tree/v0.5.11"
+            },
+            "time": "2015-04-30T00:00:00+00:00"
+        },
+        {
             "name": "paragonie/sodium_compat",
             "version": "v2.5.0",
             "source": {
@@ -5666,6 +5719,76 @@
                 }
             ],
             "time": "2026-06-05T06:23:12+00:00"
+        },
+        {
+            "name": "symfony/filesystem",
+            "version": "v7.4.11",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/filesystem.git",
+                "reference": "d721ea61b4a5fba8c5b6e7c1feda19efea144b50"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/filesystem/zipball/d721ea61b4a5fba8c5b6e7c1feda19efea144b50",
+                "reference": "d721ea61b4a5fba8c5b6e7c1feda19efea144b50",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.2",
+                "symfony/polyfill-ctype": "~1.8",
+                "symfony/polyfill-mbstring": "~1.8"
+            },
+            "require-dev": {
+                "symfony/process": "^6.4|^7.0|^8.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\Component\\Filesystem\\": ""
+                },
+                "exclude-from-classmap": [
+                    "/Tests/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Fabien Potencier",
+                    "email": "fabien@symfony.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "Provides basic utilities for the filesystem",
+            "homepage": "https://symfony.com",
+            "support": {
+                "source": "https://github.com/symfony/filesystem/tree/v7.4.11"
+            },
+            "funding": [
+                {
+                    "url": "https://symfony.com/sponsor",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/fabpot",
+                    "type": "github"
+                },
+                {
+                    "url": "https://github.com/nicolas-grekas",
+                    "type": "github"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
+                    "type": "tidelift"
+                }
+            ],
+            "time": "2026-05-11T16:38:44+00:00"
         },
         {
             "name": "symfony/finder",

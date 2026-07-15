@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'watched_import' => [
+        'api_base' => env('WATCHED_IMPORT_API_BASE', 'http://localhost:8000/api'),
+    ],
+
 ];
