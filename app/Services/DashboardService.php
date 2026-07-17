@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\EnergyRecord;
 use App\Models\MaintenanceLog;
 use App\Models\MaintenanceUnit;
+use App\Models\Product;
 use App\Models\ProductionEntry;
 use App\Models\QcRecord;
 use App\Models\Sale;
@@ -65,9 +66,15 @@ class DashboardService
         $yesterdayTotal = ProductionEntry::whereDate('production_date', $yesterday)
             ->sum('actual_output');
 
+        // Number of distinct products with a production entry on this date
+        $productsLines = ProductionEntry::whereDate('production_date', $date)
+            ->distinct('product_id')
+            ->count('product_id');
+
         return [
             'today_production_output' => (float) $dateTotal,
             'yesterday_production_output' => (float) $yesterdayTotal,
+            'products_lines' => Product::count(),
             'total_production_entries' => ProductionEntry::count(),
             'this_month_production_entries' => ProductionEntry::whereMonth('created_at', now()->month)->count(),
             'last_updated_at' => ProductionEntry::latest('updated_at')
