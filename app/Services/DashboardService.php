@@ -60,21 +60,32 @@ class DashboardService
         $date = $date ?? now()->toDateString();
         $yesterday = Carbon::parse($date)->subDay()->toDateString();
 
+        // Products excluded from total output calculations
+        // (e.g. packaging variants that shouldn't be double-counted with their parent product)
+        $excludedProducts = [
+            'Aseptic 30% Packed, 1T Tote Bag',
+        ];
+
         $dateTotal = ProductionEntry::whereDate('production_date', $date)
+            ->whereHas('product', fn ($q) => $q->whereNotIn('name', $excludedProducts))
             ->sum('actual_output');
 
         $yesterdayTotal = ProductionEntry::whereDate('production_date', $yesterday)
+            ->whereHas('product', fn ($q) => $q->whereNotIn('name', $excludedProducts))
             ->sum('actual_output');
 
-        // Number of distinct products with a production entry on this date
+        // Number of distinct products with actual production entered on this date
+        // (excludes "no entry" rows and excluded products)
         $productsLines = ProductionEntry::whereDate('production_date', $date)
+            ->whereNotNull('actual_output')
+            ->whereHas('product', fn ($q) => $q->whereNotIn('name', $excludedProducts))
             ->distinct('product_id')
             ->count('product_id');
 
         return [
             'today_production_output' => (float) $dateTotal,
             'yesterday_production_output' => (float) $yesterdayTotal,
-            'products_lines' => Product::count(),
+            'products_lines' => $productsLines,
             'total_production_entries' => ProductionEntry::count(),
             'this_month_production_entries' => ProductionEntry::whereMonth('created_at', now()->month)->count(),
             'last_updated_at' => ProductionEntry::latest('updated_at')
