@@ -34,13 +34,13 @@ class ProductionEntryService
     {
         $entry = ProductionEntry::updateOrCreate(
             [
-                'product_id'      => $data['product_id'],
+                'product_id' => $data['product_id'],
                 'production_date' => $data['production_date'],
             ],
             [
                 'actual_output' => $data['actual_output'],
                 'target_output' => $data['target_output'],
-                'remarks'       => $data['remarks'] ?? null,
+                'remarks' => $data['remarks'] ?? null,
             ]
         );
 
@@ -72,7 +72,7 @@ class ProductionEntryService
 
     public function delete(ProductionEntry $productionEntry): bool
     {
-        $id      = $productionEntry->id;
+        $id = $productionEntry->id;
         $deleted = $productionEntry->delete();
 
         $this->emitSafely(
@@ -90,7 +90,7 @@ class ProductionEntryService
         // duplicate pairs in the same batch don't cause a deadlock or
         // unique-constraint violation inside the transaction.
         $deduped = collect($entries)
-            ->unique(fn (array $e) => $e['product_id'] . '_' . $e['production_date'])
+            ->unique(fn (array $e) => $e['product_id'].'_'.$e['production_date'])
             ->values()
             ->all();
 
@@ -106,7 +106,7 @@ class ProductionEntryService
             RealtimeAction::BULK_CREATED,
             [
                 'count' => $saved->count(),
-                'ids'   => $saved->pluck('id')->values(),
+                'ids' => $saved->pluck('id')->values(),
             ]
         );
 
@@ -126,11 +126,23 @@ class ProductionEntryService
             $this->realtime->emit($module, $action, $payload);
         } catch (\Throwable $e) {
             Log::warning('Realtime emit failed — data was saved successfully.', [
-                'module'  => $module->value ?? $module->name,
-                'action'  => $action->value ?? $action->name,
+                'module' => $module->value ?? $module->name,
+                'action' => $action->value ?? $action->name,
                 'payload' => $payload,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    // 👇 NEW
+    public function getByRange(string $from, string $to): Collection
+    {
+        $fromDate = Carbon::parse($from)->startOfDay();
+        $toDate = Carbon::parse($to)->endOfDay();
+
+        return ProductionEntry::with('product')
+            ->whereBetween('production_date', [$fromDate, $toDate])
+            ->latest('production_date')
+            ->get();
     }
 }

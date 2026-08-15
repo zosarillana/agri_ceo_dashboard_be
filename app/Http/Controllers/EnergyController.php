@@ -1,4 +1,5 @@
 <?php
+
 // app/Http/Controllers/EnergyController.php
 
 namespace App\Http\Controllers;
@@ -22,7 +23,7 @@ class EnergyController extends Controller
     public function index(): JsonResponse
     {
         return response()->json([
-            'data' => $this->energyService->getAll()
+            'data' => $this->energyService->getAll(),
         ]);
     }
 
@@ -44,14 +45,19 @@ class EnergyController extends Controller
 
             'rows.*.billedAmount' => 'required|numeric|min:0',
         ]);
-
-        $saved = $this->energyService->storeBulk(
-            $request->input('rows')
-        );
+        try {
+            $saved = $this->energyService->storeBulk($request->input('rows'));
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Energy save failed',
+                'error' => $e->getMessage(),
+                'file' => basename($e->getFile()).':'.$e->getLine(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Energy records saved successfully',
-            'data'    => $saved,
+            'data' => $saved,
         ]);
     }
 
@@ -67,7 +73,7 @@ class EnergyController extends Controller
         return response()->json([
             'data' => $this->energyService->getByMonth(
                 $request->input('month')
-            )
+            ),
         ]);
     }
 
@@ -77,7 +83,7 @@ class EnergyController extends Controller
     public function getSummary(): JsonResponse
     {
         return response()->json([
-            'data' => $this->energyService->getSummary()
+            'data' => $this->energyService->getSummary(),
         ]);
     }
 }
