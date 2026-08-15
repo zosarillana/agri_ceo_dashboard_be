@@ -10,6 +10,7 @@ use App\Models\EnergyRecord;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class EnergyService
 {
@@ -31,55 +32,66 @@ class EnergyService
      */
     public function storeBulk(array $rows): Collection
     {
-        return DB::transaction(function () use ($rows) {
+        try {
+            return DB::transaction(function () use ($rows) {
 
-            $saved = collect();
+                $saved = collect();
 
-            foreach ($rows as $row) {
+                foreach ($rows as $row) {
 
-                $billingMonth = Carbon::parse($row['month'])
-                    ->startOfMonth()
-                    ->toDateString();
+                    $billingMonth = Carbon::parse($row['month'])
+                        ->startOfMonth()
+                        ->toDateString();
 
-                $existing = EnergyRecord::where('account', $row['account'])
-                    ->whereDate('billing_month', $billingMonth)
-                    ->first();
+                    $existing = EnergyRecord::where('account', $row['account'])
+                        ->whereDate('billing_month', $billingMonth)
+                        ->first();
 
-                if ($existing) {
+                    if ($existing) {
 
-                    $existing->update([
-                        'kw' => $row['kw'],
-                        'demand' => $row['demand'],
-                        'billed_amount' => $row['billedAmount'],
-                    ]);
-
-                    $saved->push($existing->fresh());
-
-                } else {
-
-                    $saved->push(
-                        EnergyRecord::create([
-                            'account' => $row['account'],
-                            'billing_month' => $billingMonth,
+                        $existing->update([
                             'kw' => $row['kw'],
                             'demand' => $row['demand'],
                             'billed_amount' => $row['billedAmount'],
-                        ])
-                    );
+                        ]);
+
+                        $saved->push($existing->fresh());
+
+                    } else {
+
+                        $saved->push(
+                            EnergyRecord::create([
+                                'account' => $row['account'],
+                                'billing_month' => $billingMonth,
+                                'kw' => $row['kw'],
+                                'demand' => $row['demand'],
+                                'billed_amount' => $row['billedAmount'],
+                            ])
+                        );
+                    }
                 }
-            }
 
-            $this->realtime->emit(
-                RealtimeModule::ENERGY,
-                RealtimeAction::BULK_CREATED,
-                [
-                    'count' => $saved->count(),
-                    'ids' => $saved->pluck('id')->values(),
-                ]
-            );
+                $this->realtime->emit(
+                    RealtimeModule::ENERGY,
+                    RealtimeAction::BULK_CREATED,
+                    [
+                        'count' => $saved->count(),
+                        'ids' => $saved->pluck('id')->values(),
+                    ]
+                );
 
-            return $saved;
-        });
+                return $saved;
+            });
+        } catch (\Throwable $e) {
+            Log::error('EnergyService::storeBulk failed', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e; // rethrow so Laravel still 500s, but now it's logged with full detail
+        }
     }
 
     /**

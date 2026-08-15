@@ -6,6 +6,7 @@ use App\Http\Requests\StoreProductionEntryRequest;
 use App\Http\Requests\UpdateProductionEntryRequest;
 use App\Models\ProductionEntry;
 use App\Services\ProductionEntryService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class ProductionEntryController extends Controller
@@ -16,8 +17,28 @@ class ProductionEntryController extends Controller
 
     public function index(Request $request)
     {
-        // If a ?date= param is provided, return only that day's entries.
-        // Otherwise return all entries (existing behaviour).
+        // Priority: month > range > single date > all
+        if ($request->filled('month')) {
+            $start = Carbon::parse($request->input('month').'-01')->startOfMonth();
+            $end = $start->copy()->endOfMonth();
+
+            return response()->json(
+                $this->productionEntryService->getByRange(
+                    $start->toDateString(),
+                    $end->toDateString()
+                )
+            );
+        }
+
+        if ($request->filled('from') && $request->filled('to')) {
+            return response()->json(
+                $this->productionEntryService->getByRange(
+                    $request->input('from'),
+                    $request->input('to')
+                )
+            );
+        }
+
         if ($request->filled('date')) {
             return response()->json(
                 $this->productionEntryService->getByDate($request->input('date'))
@@ -37,7 +58,7 @@ class ProductionEntryController extends Controller
 
         return response()->json([
             'message' => 'Production entry created successfully.',
-            'data'    => $entry,
+            'data' => $entry,
         ], 201);
     }
 
@@ -59,7 +80,7 @@ class ProductionEntryController extends Controller
 
         return response()->json([
             'message' => 'Production entry updated successfully.',
-            'data'    => $entry,
+            'data' => $entry,
         ]);
     }
 
