@@ -40,6 +40,10 @@ class ProductionEntryService
             [
                 'actual_output' => $data['actual_output'],
                 'target_output' => $data['target_output'],
+                'dly_target' => $data['dly_target'] ?? 0,
+                'dly_yield' => $data['dly_yield'] ?? 0,
+                'mtd_target' => $data['mtd_target'] ?? 0,
+                'mtd_yield' => $data['mtd_yield'] ?? 0,
                 'remarks' => $data['remarks'] ?? null,
             ]
         );

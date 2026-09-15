@@ -22,6 +22,7 @@ class ImportTemplateController extends Controller
             'columns.*.letter' => 'required|string',
             'columns.*.label' => 'required|string',
             'columns.*.db_column' => 'required|string|regex:/^[a-z_][a-z0-9_]*$/',
+            'columns.*.role' => 'nullable|string|in:product_name,actual_output,target_output,dly_target,dly_yield,mtd_target,mtd_yield,remarks',
         ]);
 
         $template = ImportTemplate::create([

@@ -74,7 +74,7 @@ class SpreadsheetImportController extends Controller
                 // "role" out of every column before it ever reaches
                 // ImportTemplate::create() — which is why templates created
                 // through this endpoint previously had no role saved at all.
-                'columns.*.role' => 'nullable|string|in:product_name,actual_output,target_output,remarks',
+                'columns.*.role' => 'nullable|string|in:product_name,actual_output,target_output,dly_target,dly_yield,mtd_target,mtd_yield,remarks',
             ]);
         } catch (ValidationException $e) {
             Log::warning('[imports] validation failed', [
