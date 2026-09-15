@@ -4,9 +4,9 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\ProductionEntry;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 use Throwable;
 
 /**
@@ -31,7 +31,9 @@ use Throwable;
 class ProductionEntrySync
 {
     protected int $matched = 0;
+
     protected int $skipped = 0;
+
     protected array $unmatchedNames = [];
 
     /** @var array<int, array{row_name: string, product_id: ?int, message: string}> */
@@ -41,9 +43,13 @@ class ProductionEntrySync
     {
         $roles = collect($columnMap)->keyBy('db_column');
 
-        $nameCol    = $this->columnForRole($roles, 'product_name');
-        $actualCol  = $this->columnForRole($roles, 'actual_output');
-        $targetCol  = $this->columnForRole($roles, 'target_output');
+        $nameCol = $this->columnForRole($roles, 'product_name');
+        $actualCol = $this->columnForRole($roles, 'actual_output');
+        $targetCol = $this->columnForRole($roles, 'target_output');
+        $dlyTargetCol = $this->columnForRole($roles, 'dly_target');
+        $dlyYieldCol = $this->columnForRole($roles, 'dly_yield');
+        $mtdTargetCol = $this->columnForRole($roles, 'mtd_target');
+        $mtdYieldCol = $this->columnForRole($roles, 'mtd_yield');
         $remarksCol = $this->columnForRole($roles, 'remarks');
 
         if (! $nameCol) {
@@ -58,7 +64,18 @@ class ProductionEntrySync
             }
 
             try {
-                $this->syncRow($row, $rawName, $actualCol, $targetCol, $remarksCol, $productionDate);
+                $this->syncRow(
+                    $row,
+                    $rawName,
+                    $actualCol,
+                    $targetCol,
+                    $dlyTargetCol,
+                    $dlyYieldCol,
+                    $mtdTargetCol,
+                    $mtdYieldCol,
+                    $remarksCol,
+                    $productionDate,
+                );
             } catch (Throwable $e) {
                 $this->errors[] = [
                     'row_name' => $rawName,
@@ -96,6 +113,10 @@ class ProductionEntrySync
         string $rawName,
         ?string $actualCol,
         ?string $targetCol,
+        ?string $dlyTargetCol,
+        ?string $dlyYieldCol,
+        ?string $mtdTargetCol,
+        ?string $mtdYieldCol,
         ?string $remarksCol,
         string $productionDate,
     ): void {
@@ -107,12 +128,28 @@ class ProductionEntrySync
         if (! $product) {
             $this->skipped++;
             $this->unmatchedNames[] = $rawName;
+
             return;
         }
 
         $actual = $this->toDecimal($actualCol ? ($row[$actualCol] ?? null) : null);
         $target = $this->toDecimal($targetCol ? ($row[$targetCol] ?? null) : null);
+        $dlyTarget = $this->toDecimal($dlyTargetCol ? ($row[$dlyTargetCol] ?? null) : null);
+        $dlyYield = $this->toDecimal($dlyYieldCol ? ($row[$dlyYieldCol] ?? null) : null);
+        $mtdTarget = $this->toDecimal($mtdTargetCol ? ($row[$mtdTargetCol] ?? null) : null);
+        $mtdYield = $this->toDecimal($mtdYieldCol ? ($row[$mtdYieldCol] ?? null) : null);
         $remarks = $remarksCol ? ($row[$remarksCol] ?? null) : null;
+
+        // Excel stores percentage-formatted cells as their underlying fraction
+        // (31.57% is stored internally as 0.3157), and the Excel reader returns
+        // that raw fraction rather than the formatted "31.57%" string. Convert
+        // to a human-readable percentage before saving.
+        if ($dlyYield !== null) {
+            $dlyYield *= 100;
+        }
+        if ($mtdYield !== null) {
+            $mtdYield *= 100;
+        }
 
         try {
             // firstOrNew (not updateOrCreate) so we can tell whether this
@@ -131,7 +168,7 @@ class ProductionEntrySync
             // rethrowing so the outer catch logs something actionable
             // instead of a bare "Data truncated" / "Invalid date" message.
             throw new \RuntimeException(
-                "Could not look up entry for product #{$product->id} ({$product->name}) on date '{$productionDate}': " . $e->getMessage(),
+                "Could not look up entry for product #{$product->id} ({$product->name}) on date '{$productionDate}': ".$e->getMessage(),
                 previous: $e,
             );
         }
@@ -140,6 +177,10 @@ class ProductionEntrySync
 
         $entry->actual_output = $actual ?? 0;
         $entry->target_output = $target ?? $product->default_target;
+        $entry->dly_target = $dlyTarget ?? 0;
+        $entry->dly_yield = $dlyYield ?? 0;
+        $entry->mtd_target = $mtdTarget ?? 0;
+        $entry->mtd_yield = $mtdYield ?? 0;
         $entry->remarks = is_string($remarks) ? trim($remarks) : $remarks;
 
         if ($isNew) {
@@ -158,8 +199,8 @@ class ProductionEntrySync
             // or actual_output/target_output overflowing the decimal
             // column's precision on an unusually large sheet value).
             throw new \RuntimeException(
-                "Could not save entry for product #{$product->id} ({$product->name}) on date '{$productionDate}' " .
-                "(actual={$actual}, target={$target}): " . $e->getMessage(),
+                "Could not save entry for product #{$product->id} ({$product->name}) on date '{$productionDate}' ".
+                "(actual={$actual}, target={$target}): ".$e->getMessage(),
                 previous: $e,
             );
         }
@@ -180,6 +221,7 @@ class ProductionEntrySync
     protected function columnForRole($rolesKeyedByDbColumn, string $role): ?string
     {
         $match = $rolesKeyedByDbColumn->first(fn ($col) => ($col['role'] ?? null) === $role);
+
         return $match['db_column'] ?? null;
     }
 
@@ -188,7 +230,8 @@ class ProductionEntrySync
         if ($value === null || $value === '') {
             return null;
         }
-        $clean = str_replace(',', '', (string) $value);
+        $clean = str_replace([',', '%'], '', (string) $value);
+
         return is_numeric($clean) ? (float) $clean : null;
     }
 }
